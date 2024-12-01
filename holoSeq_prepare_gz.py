@@ -1,13 +1,13 @@
-# for Mashmap paf, python holoSeq_prepare_paf.py --inFile  hg002_2k99.paf --title "hg002 Mashmap" --hap_indicator None --contig_sort length
+# for Mashmap paf, python holoSeq_prepare_gz.py --inFile  hg002_2k99.paf --title "hg002 Mashmap" --hap_indicator None --contig_sort length
 # for HiC pairs
-# python holoSeq_prepare_paf.py --inFile mUroPar1H1H2.paf --xclenfile mUroPar1H1suffix.len --yclenfile mUroPar1H2suffix.len --contig_sort VGPname --hap_indicator Suffix --title "VGP mUroPar1 HiC data"
+# python holoSeq_prepare_gz.py --inFile mUroPar1H1H2.paf --xclenfile mUroPar1H1suffix.len --yclenfile mUroPar1H2suffix.len --contig_sort VGPname --hap_indicator Suffix --title "VGP mUroPar1 HiC data"
 # panel serve holoseq_display.py --show --args --inFile mUroPar1H1H2.paf_cisH1_hseq.gz mUroPar1H1H2.paf_cisH2_hseq.gz mUroPar1H1H2.paf_trans_hseq.gz  --size 1000
 # or
 # panel serve holoseq_display.py --show --args --inFile mUroPar1H1H2.paf_cisH1_hseq.gz --size 1000
 #
-# python holoSeq_prepare_paf.py --inFile mUroPar1_protH1.gff --xclenfile mUroPar1H1suffix.len --contig_sort VGPname --title "mUroPar1 NCBI protein GFF"
+# python holoSeq_prepare_gz.py --inFile mUroPar1_protH1.gff --xclenfile mUroPar1H1suffix.len --contig_sort VGPname --title "mUroPar1 NCBI protein GFF"
 #
-# python holoSeq_prepare_paf.py --inFile ../hg002_bothHiC.paf --xclenfile hg002H1_suffixed.len --yclenfile hg002H2_suffixed.len --contig_sort VGPname --hap_indicator Suffix --title "T2T HG002 HiC data"
+# python holoSeq_prepare_gz.py --inFile ../hg002_bothHiC.paf --xclenfile hg002H1_suffixed.len --yclenfile hg002H2_suffixed.len --contig_sort VGPname --hap_indicator Suffix --title "T2T HG002 HiC data"
 #
 # Proof of cocept data are Arima HiC reads from the Arctic Ground Squirrel mUroPar1 VGP genomeArk repository
 # processed with Dephine's Pretext workflow using Bellerophon to remove chimeric reads
@@ -263,6 +263,18 @@ class rotater():
                 xyr = pd.DataFrame(np.vstack([xrs,yrs]).T, columns=["x", "y"])
                 return xyr
 
+    def unrotatecoords(self, xr, yr):
+        """
+        rotated coords back calculate
+        """
+        qx = xr/self.xscalefact + self.xmin
+        qy = yr/self.yscalefact + self.ymin
+        radjx = (self.offset_y - qy + qx - self.offset_x)/2
+        radjy = (qx - self.offset_x - self.cos_rad*radjx)
+        x = radjx/self.cos_rad + self.offset_x
+        y = radjy/self.cos_rad + self.offset_y
+        return (x,y)
+
 
 class gffConvert:
     """
@@ -501,7 +513,7 @@ class pafConvert:
     For HiC data, there should really be little difference - whether a haplotype contacts another haplotype or itself depends on the 3D folding and since the haplotypes are wound together into
     a helix, then the whole total contig length - about 2 meters for mammals are folded up into a 10μ^3 ball.
 
-    python holoSeq_prepare_paf.py --inFile mUroPar1H1H2.paf --xclenfile mUroPar1H1suffix.len --yclenfile mUroPar1H2suffix.len --contig_sort VGPname --hap_indicator Suffix
+    python holoSeq_prepare_gz.py --inFile mUroPar1H1H2.paf --xclenfile mUroPar1H1suffix.len --yclenfile mUroPar1H2suffix.len --contig_sort VGPname --hap_indicator Suffix
     """
 
     def __init__(self, inFname, args, xcontigs, ycontigs, haps, xwidth, ywidth):
