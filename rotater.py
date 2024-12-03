@@ -3,6 +3,7 @@ import math
 import random
 
 SQRT2 = math.sqrt(2)
+
 class rotater():
     """
     moved into a class so the constants are only calculated once
@@ -69,26 +70,26 @@ class rotater():
         adjx = (self.offset_y - qy + qx - self.offset_x)/2
         adjy = (qx - self.offset_x - adjx)
         x = adjx/self.cos_rad + self.offset_x
-        y = adjy/self.cos_rad + self.offset_y
+        y = adjy/self.cos_rad + self.offset_y    
         return (x,y)
 
 
 
 if __name__ == "__main__":
-	xwidth = 3000000
-	r = rotater(xwidth, xwidth)
-	r.onepointRot = True
-	tests = [(0,0),(xwidth, 0),  (xwidth/2, xwidth/2), (xwidth, xwidth)]
-	if False:
-    		for x,y in tests:
-        		xr,yr = r.rotatecoords(x,y)
-       			xrs = (xr-r.xmin)*r.xscalefact
-        		yrs = (yr-r.ymin)*r.yscalefact
-        		print('x %d y %d xr %d yr %d xrs %d yrs %d' % (x,y, xr, yr, xrs, yrs))
-	else:
-    		for i in range(50):
-        		y = random.randint(0,xwidth)
-        		x = max(0, y - random.randint(0,100))
-        		xr,yr = r.rotatecoords(x,y)
-        		xur, yur = r.unrotatecoords(xr,yr)
-		        print('xdiff %d ydiff %d %d y %d xr %d yr %d xur %d yur %d' % (xur-x, yur-y, x,y, xr, yr, xur, yur))
+    xwidth = 3000000
+    r = rotater(xwidth, xwidth)
+    r.onepointRot = True
+    tests = [(0,0),(xwidth, 0),  (xwidth/2, xwidth/2), (xwidth, xwidth)]
+    if False:
+        for x,y in tests:
+            xr,yr = r.rotatecoords(x,y)
+            xrs = (xr-r.xmin)*r.xscalefact
+            yrs = (yr-r.ymin)*r.yscalefact
+            print('x %d y %d xr %d yr %d xrs %d yrs %d' % (x,y, xr, yr, xrs, yrs))
+    else:
+        for i in range(50):
+            y = random.randint(0,xwidth)
+            x = max(0, y - random.randint(0,100))
+            xr,yr = r.rotatecoords(x,y)
+            xur, yur = r.unrotatecoords(xr,yr)
+            print('xdiff %d ydiff %d for random test %d y %d xr %d yr %d xur %d yur %d' % (xur-x, yur-y, x,y, xr, yr, xur, yur))
