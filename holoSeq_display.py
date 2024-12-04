@@ -21,6 +21,8 @@ import math
 import numpy as np
 import os
 import sys
+import sys
+import urllib.request
 
 
 import holoviews as hv
@@ -39,7 +41,7 @@ from holoviews.operation import decimate
 
 from holoviews import opts
 
-import rotater
+from rotater import rotater
 
 hv.extension("bokeh", "matplotlib", width=100)
 
@@ -207,7 +209,7 @@ class holoSeq_maker:
         prepare a complete panel for the final display
         """
 
-        def showTap(x, y, rot, cxstarts, cxnames, cystarts, cynames):
+        def showTap(x, y, rot, cxstarts, cxnames, cystarts, cynames, rotated):
             if np.isnan(x) or np.isnan(y):
                 s = "Mouse click on image for location"
             else:
@@ -215,8 +217,10 @@ class holoSeq_maker:
                 offsx = 0
                 chry = "Out of range"
                 offsy = 0
-                if self.rotated:
-                    xur, yur = rot.unrotatecoords(xr=x, yr=y, adjust=True)
+                xur = 0
+                yur = 0
+                if rotated == "True":
+                    xur, yur = rot.unrotatecoords(xr=x, yr=y)
                     i = bisect_left(cxstarts, xur)
                     if i > 0 and i <= len(cxnames):
                         chrx = cxnames[i - 1]
@@ -268,6 +272,8 @@ class holoSeq_maker:
         (hsDims, hapsread, xcoords, ycoords, annos, plotType, metadata, gffdata, hh) = (
             self.import_holoSeq_data(inFile)
         )
+        self.rotated = metadata.get("rotated", [False,])[0]
+        print('rotated', self.rotated)
         rot = rotater(max(xcoords), max(ycoords))
         title = " ".join(metadata["title"])
         hqstarts = OrderedDict()
@@ -324,6 +330,7 @@ class holoSeq_maker:
                 cxstarts=h1starts,
                 cynames=h2names,
                 cystarts=h2starts,
+                rotated=self.rotated,
             )
         elif ax == haps[0]:
             showloc = pn.bind(
@@ -335,6 +342,7 @@ class holoSeq_maker:
                 cxstarts=h1starts,
                 cynames=h1names,
                 cystarts=h1starts,
+                rotated=self.rotated,
             )
         elif ax == haps[1]:
             showloc = pn.bind(
@@ -346,6 +354,7 @@ class holoSeq_maker:
                 cxstarts=h2starts,
                 cynames=h2names,
                 cystarts=h2starts,
+                rotated=self.rotated,
             )
         else:
             log.warn("ax = %s for title = %s - cannot assign axes" % (ax, title))
@@ -479,6 +488,19 @@ class holoSeq_maker:
         # Display iframe in a Panel HTML pane
         pn.pane.HTML(iframe_html, height=350, sizing_mode="stretch_width")
         """
+
+        def get_ncbi(target):
+
+            xpuri = 'https://www.ncbi.nlm.nih.gov/gene/?term=%s' % target
+            req = urllib.request.Request(xpuri)
+            with urllib.request.urlopen(req) as response:
+                apage = response.read()
+            escaped_html = html.escape(apage)
+            # Create iframe embedding the escaped HTML and display it
+            iframe_html = f'<iframe srcdoc="{escaped_html}" style="height:100%; width:100%" frameborder="0"></iframe>'
+            # Display iframe in a Panel HTML pane
+            pn.pane.HTML(iframe_html, height=350, sizing_mode="stretch_width")
+
 
         def showX(x, y):
             if np.isnan(x):
@@ -632,7 +654,7 @@ parser.add_argument(
     nargs="+",
 )
 parser.add_argument(
-    "--size", help="Display size in pixels. Default is 800", default=1000
+    "--size", help="Display size in pixels. Default is 1000", default=1000
 )
 parser.add_argument("--version", "-V", action="version", version="0.1")
 args = parser.parse_args()

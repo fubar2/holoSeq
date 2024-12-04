@@ -6,7 +6,8 @@ SQRT2 = math.sqrt(2)
 
 class rotater():
     """
-    moved into a class so the constants are only calculated once
+    moved into a class for reuse
+	Constants now only calculated once
     if single pairs are being rotated
     x 0 y 0 xr -2121320 yr 878679
     x 3000000 y 0 xr 0 yr -1242640

@@ -1,9 +1,9 @@
 # for Mashmap paf, python holoSeq_prepare_gz.py --inFile  hg002_2k99.paf --title "hg002 Mashmap" --hap_indicator None --contig_sort length
 # for HiC pairs
 # python holoSeq_prepare_gz.py --inFile mUroPar1H1H2.paf --xclenfile mUroPar1H1suffix.len --yclenfile mUroPar1H2suffix.len --contig_sort VGPname --hap_indicator Suffix --title "VGP mUroPar1 HiC data"
-# panel serve holoseq_display.py --show --args --inFile mUroPar1H1H2.paf_cisH1_hseq.gz mUroPar1H1H2.paf_cisH2_hseq.gz mUroPar1H1H2.paf_trans_hseq.gz  --size 1000
+# panel serve holoSeq_display.py --show --args --inFile mUroPar1H1H2.paf_cisH1_hseq.gz mUroPar1H1H2.paf_cisH2_hseq.gz mUroPar1H1H2.paf_trans_hseq.gz  --size 1000
 # or
-# panel serve holoseq_display.py --show --args --inFile mUroPar1H1H2.paf_cisH1_hseq.gz --size 1000
+# panel serve holoSeq_display.py --show --args --inFile mUroPar1H1H2.paf_cisH1_hseq.gz --size 1000
 #
 # python holoSeq_prepare_gz.py --inFile mUroPar1_protH1.gff --xclenfile mUroPar1H1suffix.len --contig_sort VGPname --title "mUroPar1 NCBI protein GFF"
 #
@@ -717,7 +717,7 @@ if __name__ == "__main__":
         ps = Path(f).suffix.lower()
         log.debug("inFile=%s, ftype = %s" % (f, ps))
 
-        if ps in [".paf", ".paf.gz"]:
+        if f.endswith(".paf") or f.endswith(".paf.gz"):
             p = pafConvert(f, args, sxcontigs, sycontigs, haps, xwidth, ywidth)
         elif ps in [".bw", ".bigwig"]:
             outf = "%s.hseq.gz" % f
