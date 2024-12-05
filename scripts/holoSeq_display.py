@@ -16,11 +16,11 @@ import argparse
 from bisect import bisect_left
 from collections import OrderedDict
 import gzip
+import html
 import logging
 import math
 import numpy as np
 import os
-import sys
 import sys
 import urllib.request
 
@@ -583,10 +583,6 @@ cds XP_026248570.1 531341254 531341334 100 100 + 134
                 segs["colour"].append(colr)
                 segs["thickness"].append(cdthick)
                 segs["alpha"].append(1.0)
-        xmin = min(segs[xcf])
-        xmax = max(segs["x2"])
-        ymin = min(segs["wy1"])
-        ymax = max(segs["wy1"])
         title = " ".join(metadata["title"])
         haps = []
         print("GFF rows read =", len(gffdata))

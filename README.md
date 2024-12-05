@@ -166,15 +166,15 @@ git clone https://github.com/fubar2/holoSeq
 cd holoSeq
 python -m venv venv
 . venv/bin/activate
-pip install -r requirements.txt
-panel serve scripts/holoseq_display.py --show --args --inFile data/mUroPar1H1H2.paf_cisH1_hseq.gz --size 1000
+pip install -r src/requirements.txt
+panel serve scripts/holoSeq_display.py --show --args --inFile data/mUroPar1H1H2.paf_cisH1_hseq.gz --size 1000
 ```
 
 Expect to see output shown below, and a web browser window should pop open. Takes 10-20 seconds to
 read the 3.4M pairs and to show the interactive visualisation:
 
 ```bash
-panel serve holoseq_display.py --args --inFile mUroPar1_cis1.hseq.gz --size 1000
+panel serve holoSeq_display.py --args --inFile mUroPar1_cis1.hseq.gz --size 1000
 2024-10-29 17:06:33,645 Starting Bokeh server version 3.6.0 (running on Tornado 6.4.1)
 2024-10-29 17:06:33,646 User authentication hooks NOT provided (default user enabled)
 2024-10-29 17:06:33,649 Bokeh app running at: http://localhost:5006/holoseq_display

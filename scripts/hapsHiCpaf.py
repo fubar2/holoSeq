@@ -94,7 +94,7 @@ def export_mapping():
                 f.write(row)
         if hstarts is not None:
             with open("%s.len" % ofn, "w") as f2:
-                clens = ["%s\t%d\n" % (x, hstarts[x]) for x in inhstarts.keys()]
+                clens = ["%s\t%d\n" % (x, hstarts[x]) for x in hstarts.keys()]
                 f2.write("".join(clens))
 
 
