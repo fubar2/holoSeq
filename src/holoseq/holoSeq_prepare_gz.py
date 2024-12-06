@@ -37,12 +37,11 @@ import io
 import itertools
 import logging
 import math
-import numpy as np
+
 
 import re
 import os
 
-import pandas as pd
 import pybigtools
 
 
@@ -462,7 +461,6 @@ class pafConvert:
         # have the axes set up so prepare the three plot x/y vectors
         # for a second pass to calculate all the coordinates.
         # adding tooltips just does not scale so abandoned - see the tooltip old version
-        ncis1 = ncis2 = ntrans = 0
         hsId = holoSeqHeaders[1]
         self.inFname = inFname
         self.prepPafGZ(hsId, haps, xcontigs, ycontigs, args)

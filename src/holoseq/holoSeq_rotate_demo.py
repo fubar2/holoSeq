@@ -16,14 +16,12 @@
 #
 
 from bisect import bisect_left
-from collections import OrderedDict
-import gzip
 import itertools
 import math
 import numpy as np
 
 import holoviews as hv
-import pandas as pd
+
 import panel as pn
 
 from rotater import rotater

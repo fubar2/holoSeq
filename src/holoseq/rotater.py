@@ -1,5 +1,7 @@
 # re-used in a couple of places for holoSeq
 import math
+import pandas as pd
+import numpy as np
 import random
 
 SQRT2 = math.sqrt(2)

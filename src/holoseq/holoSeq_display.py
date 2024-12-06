@@ -39,8 +39,6 @@ from holoviews.operation.resample import ResampleOperation2D
 from holoviews.operation import decimate
 
 
-from holoviews import opts
-
 from rotater import rotater
 
 hv.extension("bokeh", "matplotlib", width=100)
@@ -119,7 +117,7 @@ class holoSeq_maker:
                             plotType = hseqformat[1].strip()
                 elif trow.startswith("@"):
                     row = trow[1:]
-                    if row.startswith("@"):
+                    if row.startswith("@"): # meta-metadata
                         srow = row[1:].split()
                         metadata[srow[0]] = srow[1:]
                         if srow[0] == "GFF":
