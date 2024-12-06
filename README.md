@@ -195,16 +195,14 @@ the plot.
 - Pan by grabbing with the left mouse button.
 - Only pairs involving H1 contigs (H1 cis) are used in the demonstration.
 
-Briefly, the framework creates the
-[minimum data required](https://github.com/fubar2/holoSeq/blob/main/HoloSeqOverview.md) to create a
+Briefly, the framework converter, `holoSeq_prepare_gz.py` reads the raw track input and converts
+it into the [minimum data and metadata required](https://github.com/fubar2/holoSeq/blob/main/HoloSeqOverview.md) to create a
 plot. A genome lengths file is required, and the named contigs can be reordered by name or length.
 The axes are defined by the ordering. The lengths are cumulated to give an offset to the first
 nucleotide of each contig, so the track can be read and feature locations converted into the plot
-coordinate system, and stored as a compressed intermediate file. The display application reads these
-pre-computed plot coordinate files, with enough metadata about the reference sequence to add tic
-marks to the axes and to back-calculate the stream of user tap coordinates. A converter for PAF to
-compressed hseq format for input is available and was used to generate the demonstration. Bigwig is
-working and other common genomic annotation formats, such as gff and vcf will follow.
+coordinate system, and compressed. The display `holoSeq_display.py` application reads these
+pre-computed plot coordinate files, and uses metadata about the reference sequence(s) to add tic
+marks to the axes and to back-calculate the stream of user tap coordinates if the plot has been rotated. 
 
 Multiple input files will produce a stack of plots that work independently:
 
@@ -224,10 +222,9 @@ is a 23M gzip containing all the information needed to plot these 3.6M pairs.
 ## Prepare a PAF file containing the points to be plotted
 
 The demonstration holoSeq plot hseq format coordinate data was prepared from a PAF file. That was
-output from a Galaxy VGP workflow, mapping the arima HiC reads against the assembled haplotypes,
-running Bellerophon to remove chimeric Arima reads and merging into a bam containing all HiC pairs.
-These were converted to a sam file with header using `samtools view`, then processed into a PAF
-using this AWK script:
+output from a Galaxy VGP workflow, mapping Arima HiC reads against the current assembled haplotypes,
+running Bellerophon and merging into a bam containing all HiC pairs. This paired bam was converted to a sam file with header using `samtools view`, then processed into a PAF
+using this AWK script as part of the Galaxy VGP workflow:
 
 ```bash
 #!/bin/awk -f
