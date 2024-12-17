@@ -1,3 +1,7 @@
+# class for gff tracks in holoSeq
+# has functions to read a gff and write a hseq.gz, and to prepare a panel showing that hseq.gz 
+# using the generic data.load function
+
 from bisect import bisect_left
 import gzip
 import html
@@ -8,7 +12,7 @@ import os
 import urllib.request
 
 from config import VALID_HSEQ_FORMATS
-import data
+from holoseq import holoseq_data
 
 import holoviews as hv
 from holoviews.operation.datashader import (
@@ -102,7 +106,7 @@ class gff:
 
         self.export_mapping(outFname, contigs, segs, args)
 
-    def export_mapping(self, outFname, contigs, segs, args):
+    def export(self, outFname, contigs, segs, args):
         """
         for GFF
         @v1HoloSeq2D for example
@@ -115,7 +119,7 @@ class gff:
             """
             holoSeq output format
             """
-            h = ["@%s %s %d" % (data.getHap(k), k, contigs[k]) for k in contigs.keys()]
+            h = ["@%s %s %d" % (holoseq_data.getHap(k), k, contigs[k]) for k in contigs.keys()]
             metah = [
                 self.hsId,
                 "@@GFF 1",
@@ -224,7 +228,7 @@ class gff:
             return str_pane
 
         (hsDims, hapsread, xcoords, ycoords, annos, plotType, metadata, gffdata, hh) = (
-            self.import_holoSeq_data(inFile)
+            holoseq_data.load(inFile)
         )
         xcf = os.path.splitext(metadata["xclenfile"][0])[0]
         segs = {

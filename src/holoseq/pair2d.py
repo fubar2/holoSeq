@@ -1,3 +1,8 @@
+# 2d heatmaps from paf or hic tracks in holoSeq
+# has functions to read a paf and write a hseq.gz, and to prepare a panel showing that hseq.gz 
+# using the generic  holoseq_.load function
+# need to add the hic code here too
+
 from bisect import bisect_left
 from collections import OrderedDict
 import gzip
@@ -17,7 +22,8 @@ import panel as pn
 
 
 from config import VALID_HSEQ_FORMATS
-import data
+
+from holoseq import holoseq_data
 
 from rotater import rotater
 
@@ -51,14 +57,14 @@ class pair2d:
     slower but no room for the entire output if the input is 60GB+
 
     paf to xy and axis metadata
-    Assumes pairs of points representing HiC contact pairs, or Mashmap sequence similarity hits. HiC data typically comes from pairs of haplotypes and is used to help assemble all
+    Assumes pairs of points representing HiC contact pairs, or Mashmap sequence similarity hits. HiC  holoseq_ typically comes from pairs of haplotypes and is used to help assemble all
     the contigs into chromosomes
 
     These coordinate pairs are of 3 types - both ends on one or the other reference sequence, or one end on each for HiC pairs.
     Let's call these cis if the same reference and trans if between the two references. The ones in cis are likely to be consistent-ish between the two haplotypes, but the trans ones turn
     out to be very interesting...
 
-    For HiC data, there should really be little difference - whether a haplotype contacts another haplotype or itself depends on the 3D folding and since the haplotypes are wound together into
+    For HiC  holoseq_, there should really be little difference - whether a haplotype contacts another haplotype or itself depends on the 3D folding and since the haplotypes are wound together into
     a helix, then the whole total contig length - about 2 meters for mammals are folded up into a 10μ^3 ball.
 
     python holoSeq_prepare_gz.py --inFile mUroPar1H1H2.paf --xclenfile mUroPar1H1suffix.len --yclenfile mUroPar1H2suffix.len --contig_sort VGPname --hap_indicator Suffix
@@ -159,7 +165,7 @@ class pair2d:
             return str_pane
 
         (hsDims, hapsread, xcoords, ycoords, annos, plotType, metadata, gffdata, hh) = (
-            data.load(inFile)
+            holoseq_data.load(inFile)
         )
         self.rotated = metadata.get("rotated", [False,])[0]
         print('rotated', self.rotated)
@@ -198,7 +204,7 @@ class pair2d:
         # once the pairs have been read and mapped into a grid, the code
         # below does the plotting.
         # it can be copied, edited to suit your needs and
-        # run repeatedly without waiting for the data to be mapped.
+        # run repeatedly without waiting for the  holoseq_ to be mapped.
         xcf = os.path.splitext(metadata["xclenfile"][0])[0]
         ycf = "Y:" + os.path.splitext(metadata["yclenfile"][0])[0]
         print("xcf", xcf, "ycf", ycf)
@@ -281,7 +287,7 @@ class pair2d:
 
     def readPAF(self, f):
         # might be a gz
-        ncis1 = ncis2 = ntrans = 0
+        self.nrcis1 = self.nrcis2 = self.nrtrans = 0
         for rowi, rows in enumerate(f):
             row = rows.strip().split()
             if len(row) > 7:
@@ -289,8 +295,8 @@ class pair2d:
                 c2 = row[5]
                 n1 = int(row[2])
                 n2 = int(row[7])
-                H1 = data.getHap(c1)
-                H2 = data.getHap(c2)
+                H1 =  holoseq_data.getHap(c1)
+                H2 =  holoseq_data.getHap(c2)
                 if H1 != H2:  # trans
                     if H1 == self.haps[0]:  # x is h1 for trans - otherwise ignore
                         x = self.xcontigs[c1] + n1
@@ -303,7 +309,7 @@ class pair2d:
                         if x is not None:
                             row = str.encode("%d %d\n" % (x, y))
                             self.transf.write(row)
-                            ntrans += 1
+                            self.nrtrans += 1
                     else:
                         x = self.xcontigs[c2] + n2
                         y = self.ycontigs[c1] + n1
@@ -315,7 +321,7 @@ class pair2d:
                         if x is not None:
                             row = str.encode("%d %d\n" % (x, y))
                             self.transf.write(row)
-                            ntrans += 1
+                            self.nrtrans += 1
                 else:  # cis
                     if H1 == self.haps[0]:
                         x = self.xcontigs[c1] + n1
@@ -328,7 +334,7 @@ class pair2d:
                         if x is not None:
                             row = str.encode("%d %d\n" % (x, y))
                             self.cis1f.write(row)
-                            ncis1 += 1
+                            self.nrcis1 += 1
                     else:
                         x = self.ycontigs[c1] + n1
                         y = self.ycontigs[c2] + n2
@@ -340,8 +346,8 @@ class pair2d:
                         if x is not None:
                             row = str.encode("%d %d\n" % (x, y))
                             self.cis2f.write(row)
-                            ncis2 += 1
-        log.debug("ncis1=%d, ncis2=%d, ntrans=%d" % (ncis1, ncis2, ntrans))
+                            self.nrcis2 += 1
+        log.debug("nrcis1=%d, nris2=%d, nrtrans=%d" % (self.nrcis1, self.nrcis2, self.nrtrans))
 
     def isGzip(self, inFname):
         with gzip.open(inFname, "r") as fh:
@@ -354,7 +360,14 @@ class pair2d:
 
     def prepPafGZ(self, hsId, haps, xcontigs, ycontigs, args):
         """
-        @v1HoloSeq2D for example
+        A pairwise 2d plot involves a genome for each axis.
+        A paf or HiC track file contains pairs of coordinates (contig, offset).
+        Both coordinates might be on the same genome (termed "cis" in this 2 haplotype context).
+        It is also possible that the coordinates are on two separate genomes (termed "trans" here). 
+        Pairs are typically binned to downscale the plot density for HiC pairs, and this distinction is usually ignored - all pairs starting or ending in the window 
+        are counted, no matter which haplotype is involved. This may help smooth the  holoseq_ and make it easier to visualise, but it throws away a lot of information
+        For individual points, it may be interesting to see the raw  holoseq_ but that requires plot axes 
+        to correspond precisely to the genome lengths file, for the coordinates to be correct.
         """
 
         def prepHeader(
@@ -373,11 +386,11 @@ class pair2d:
             holoSeq output format - prepare gzip output channels
             """
             h = [
-                "@%s %s %d" % (data.getHap(k), k, xcontigs[k]) for k in xcontigs.keys()
+                "@%s %s %d" % ( holoseq_data.getHap(k), k, xcontigs[k]) for k in xcontigs.keys()
             ]
             if len(haps) > 1:
                 h += [
-                    "@%s %s %d" % (data.getHap(k), k, ycontigs[k])
+                    "@%s %s %d" % ( holoseq_data.getHap(k), k, ycontigs[k])
                     for k in ycontigs.keys()
                 ]
             metah = [
@@ -399,6 +412,7 @@ class pair2d:
         fn1 = "%s_cis%s_hseq.gz" % (self.inFname, haps[0])
         if self.rotate:
             fn1 = "%s_rotated_cis%s_hseq.gz" % (self.inFname, haps[0])
+        self.cis0n = fn1
         f1 = gzip.open(fn1, mode="wb")
         self.cis1f = io.BufferedWriter(f1, buffer_size=1024 * 1024)
         prepHeader(
@@ -416,6 +430,7 @@ class pair2d:
         fn2 = "%s_cis%s_hseq.gz" % (self.inFname, haps[1])
         if self.rotate:
             fn2 = "%s_rotated_cis%s_hseq.gz" % (self.inFname, haps[1])
+        self.cis1n = fn2
         f2 = gzip.open(fn2, mode="wb")
         self.cis2f = io.BufferedWriter(f2, buffer_size=1024 * 1024)
         prepHeader(
@@ -431,6 +446,7 @@ class pair2d:
             ax=haps[1],
         )
         fn3 = "%s_trans_hseq.gz" % (self.inFname)
+        self.transn = fn1
         if self.rotate:
             fn3 = "%s_rotated_trans_hseq.gz" % (self.inFname)
         f3 = gzip.open(fn3, mode="wb")
