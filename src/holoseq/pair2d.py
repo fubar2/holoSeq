@@ -1,19 +1,51 @@
+from bisect import bisect_left
+from collections import OrderedDict
 import gzip
 import io
 import logging
+import numpy as np
+import os
+
+import sys
+
+
+
+import holoviews as hv
+import pandas as pd
+import panel as pn
+
+
 
 from config import VALID_HSEQ_FORMATS
 import data
 
-
 from rotater import rotater
+
+
+from holoviews.operation.datashader import (
+    rasterize,
+    dynspread,
+)
+#from holoviews.operation.element import apply_when
+from holoviews.operation.resample import ResampleOperation2D
+from holoviews.operation import decimate
+
+
+hv.extension("bokeh", "matplotlib", width=100)
+
+# Default values suitable for this notebook
+decimate.max_samples = 1000
+dynspread.max_px = 8
+dynspread.threshold = 0.75
+ResampleOperation2D.width = 250
+ResampleOperation2D.height = 250
 
 
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger("pair2d")
 
 
-class pafConvert:
+class pair2d:
     """
     updated to stream row at a time -
     slower but no room for the entire output if the input is 60GB+
@@ -59,6 +91,193 @@ class pafConvert:
         self.cis1f.close()
         self.cis2f.close()
         self.transf.close()
+
+
+    def makePanel(self, inFile, pwidth):
+        """
+        prepare a complete panel for the final display
+        """
+
+        def showTap(x, y, rot, cxstarts, cxnames, cystarts, cynames, rotated):
+            if np.isnan(x) or np.isnan(y):
+                s = "Mouse click on image for location"
+            else:
+                chrx = "Out of range"
+                offsx = 0
+                chry = "Out of range"
+                offsy = 0
+                xur = 0
+                yur = 0
+                if rotated == "True":
+                    xur, yur = rot.unrotatecoords(xr=x, yr=y)
+                    i = bisect_left(cxstarts, xur)
+                    if i > 0 and i <= len(cxnames):
+                        chrx = cxnames[i - 1]
+                        offsx = xur - cxstarts[i - 1]
+                    i = bisect_left(cystarts, yur)
+                    if i > 0 and i <= len(cynames):
+                        chry = cynames[i - 1]
+                        offsy = yur - cystarts[i - 1]
+                    s = "Rotated X axis genome %s:%d Rotated Y axis genome %s:%d x %d y %d xur %d yur %d" % (
+                        chrx,
+                        offsx,
+                        chry,
+                        offsy,
+                        x,
+                        y,
+                        xur,
+                        yur,
+                    )
+                else:
+                    i = bisect_left(cxstarts, x)
+                    if i > 0 and i <= len(cxnames):
+                        chrx = cxnames[i - 1]
+                        offsx = x - cxstarts[i - 1]
+                    i = bisect_left(cystarts, y)
+                    if i > 0 and i <= len(cynames):
+                        chry = cynames[i - 1]
+                        offsy = y - cystarts[i - 1]
+                    s = "X axis genome %s:%d Y axis genome %s:%d x %d y %d xur %d yur %d" % (
+                chrx,
+                offsx,
+                chry,
+                offsy,
+                x,
+                y,
+                xur,
+                yur,
+            )
+            str_pane = pn.pane.Str(
+                s,
+                styles={
+                    "font-size": "10pt",
+                    "color": "darkblue",
+                    "text-align": "center",
+                },
+                width=pwidth,
+            )
+            return str_pane
+
+        (hsDims, hapsread, xcoords, ycoords, annos, plotType, metadata, gffdata, hh) = (
+            data.load(inFile)
+        )
+        self.rotated = metadata.get("rotated", [False,])[0]
+        print('rotated', self.rotated)
+        rot = rotater(max(xcoords), max(ycoords))
+        title = " ".join(metadata["title"])
+        hqstarts = OrderedDict()
+        haps = []
+        print("Read nx=", len(xcoords), "ny=", len(ycoords))
+        h1starts = []
+        h1names = []
+        h2starts = []
+        h2names = []
+        for i, hap in enumerate(hapsread.keys()):
+            haps.append(hap)
+            hqstarts[hap] = OrderedDict()
+            for j, contig in enumerate(hapsread[hap]["cn"]):
+                cstart = hapsread[hap]["startpos"][j]
+                hqstarts[hap][contig] = cstart
+                if i == 0:
+                    h1starts.append(cstart)
+                    h1names.append(contig)
+                else:
+                    h2starts.append(cstart)
+                    h2names.append(contig)
+        hap = hh[0]
+        if len(h2starts) == 0:
+            h2starts = h1starts
+            h2names = h1names
+            log.warn("only one haplotype read for %s" % title)
+        qtic1 = [(h1starts[i], h1names[i]) for i in range(len(h1starts))]
+        hap = hh[1]
+        if self.rotated: # yaxis makes no real sense
+            qtic2 = [(0,'')]
+        else:
+            qtic2 = [(h2starts[i], h2names[i]) for i in range(len(h2starts))]
+        # once the pairs have been read and mapped into a grid, the code
+        # below does the plotting.
+        # it can be copied, edited to suit your needs and
+        # run repeatedly without waiting for the data to be mapped.
+        xcf = os.path.splitext(metadata["xclenfile"][0])[0]
+        ycf = "Y:" + os.path.splitext(metadata["yclenfile"][0])[0]
+        print("xcf", xcf, "ycf", ycf)
+        pafxy = pd.DataFrame.from_dict({xcf: xcoords, ycf: ycoords})
+        pafp = hv.Points(pafxy, kdims=[xcf, ycf])
+
+        # apply_when(pafp, operation=rasterize, predicate=lambda x: len(x) > 5000)
+        stream = hv.streams.Tap(x=0, y=0)
+        ax = metadata.get("axes", [None])[0]
+        log.debug("axes = %s" % ax)
+        if ax == "BOTH":
+            showloc = pn.bind(
+                showTap,
+                x=stream.param.x,
+                y=stream.param.y,
+                rot=rot,
+                cxnames=h1names,
+                cxstarts=h1starts,
+                cynames=h2names,
+                cystarts=h2starts,
+                rotated=self.rotated,
+            )
+        elif ax == haps[0]:
+            showloc = pn.bind(
+                showTap,
+                x=stream.param.x,
+                y=stream.param.y,
+                rot=rot,
+                cxnames=h1names,
+                cxstarts=h1starts,
+                cynames=h1names,
+                cystarts=h1starts,
+                rotated=self.rotated,
+            )
+        elif ax == haps[1]:
+            showloc = pn.bind(
+                showTap,
+                x=stream.param.x,
+                y=stream.param.y,
+                rot=rot,
+                cxnames=h2names,
+                cxstarts=h2starts,
+                cynames=h2names,
+                cystarts=h2starts,
+                rotated=self.rotated,
+            )
+        else:
+            log.warn("ax = %s for title = %s - cannot assign axes" % (ax, title))
+            sys.exit(2)
+        # an alternative but can't get a stream in there..nice to have control over the resample_when but.
+        # dat.hvplot(kind="scatter", x="x", y="y", color="maroon", rasterize=True, resample_when=200, cnorm='log', padding=(0, 0.1), cmap="inferno",
+        #   min_height=700, autorange='y', title="Datashader Rasterize", colorbar=True, line_width=2 ,marker="x" )
+
+        p1 = pn.Column(
+            showloc,
+            pn.pane.HoloViews(
+                dynspread(rasterize(pafp), streams=[stream])
+                .relabel("%s" % title)
+                .opts(
+                    cmap="inferno",
+                    cnorm="log",
+                    colorbar=True,
+                    shared_axes=False,
+                    width=self.pwidth,
+                    height=self.pwidth,
+                    xticks=qtic1,
+                    yticks=qtic2,
+                    xrotation=45,
+                    fontsize={"xticks": 5, "yticks": 5},
+                    tools=["tap"],
+                    scalebar=True,
+                    scalebar_range="x",
+                    scalebar_location="bottom_left",
+                    scalebar_unit=("bp"),
+                    show_grid=True,
+                )
+            ),
+        )
+        return p1, title
 
     def readPAF(self, f):
         # might be a gz

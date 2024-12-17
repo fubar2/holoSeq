@@ -6,7 +6,6 @@ from functools import cmp_to_key
 from pathlib import Path
 
 import gzip
-import io
 import itertools
 import logging
 
@@ -29,7 +28,6 @@ def getHap(contig, hap_indicator="None"):
     whoever assembles your genomes.
      help="None, Suffix (H[1,2]) Dashsuffix (_H...)"
     """
-    hi = hap_indicator
     if hap_indicator == "None":
         return "H1"
     elif hap_indicator == "Suffix":

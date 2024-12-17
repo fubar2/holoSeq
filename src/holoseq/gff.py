@@ -1,18 +1,28 @@
+from bisect import bisect_left
 import gzip
-import io
+import html
 import logging
+import numpy as np
+import os
+
+import urllib.request
 
 from config import VALID_HSEQ_FORMATS
 import data
 
+import holoviews as hv
+from holoviews.operation.datashader import (
+    rasterize,
+)
 
+from holoviews.operation.element import apply_when
+import panel as pn
 
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger("holoseq_prepare")
 
 
-
-class gffConvert:
+class gff:
     """
             Only care about mRNA cds and stop codons initally. Turn into segments. Filter so only data in contigs is retained from input.
     SUPER_1 miniprot        mRNA    139006290       139072696       22660   -       .       ID=MP000006;Rank=1;Identity=0.9979;Positive=0.9984;Target=XP_026244093.1 1 4350
@@ -24,7 +34,7 @@ class gffConvert:
         mrnaseen = {}
         segs = {}
         comment = "#"
-        self.hsId = config.VALID_HSEQ_FORMATS[0]
+        self.hsId = VALID_HSEQ_FORMATS[0]
         self.inFname = gff
         log.debug("contigs=%s" % str(contigs)[:1000])
         with open(gff) as g:
@@ -105,7 +115,7 @@ class gffConvert:
             """
             holoSeq output format
             """
-            h = ["@%s %s %d" % (getHap(k), k, contigs[k]) for k in contigs.keys()]
+            h = ["@%s %s %d" % (data.getHap(k), k, contigs[k]) for k in contigs.keys()]
             metah = [
                 self.hsId,
                 "@@GFF 1",
@@ -157,3 +167,176 @@ class gffConvert:
                             (startp, targ, _) = m
                             row = str.encode(f"stopc {targ} {con} {startp}\n")
                             ofn.write(row)
+
+    def makeGFFPanel(self, inFile, pwidth):
+        """
+                prepare a complete panel for the final display
+        https://www.ncbi.nlm.nih.gov/gene/?term=XP_026235740.1
+
+        import urllib.request
+        xpuri = 'https://www.ncbi.nlm.nih.gov/gene/?term=XP_026235740.1'
+        req = urllib.request.Request(xpuri)
+        with urllib.request.urlopen(req) as response:
+           apage = response.read()
+        escaped_html = html.escape(apage)
+
+        # Create iframe embedding the escaped HTML and display it
+        iframe_html = f'<iframe srcdoc="{escaped_html}" style="height:100%; width:100%" frameborder="0"></iframe>'
+
+        # Display iframe in a Panel HTML pane
+        pn.pane.HTML(iframe_html, height=350, sizing_mode="stretch_width")
+        """
+
+        def get_ncbi(target):
+
+            xpuri = 'https://www.ncbi.nlm.nih.gov/gene/?term=%s' % target
+            req = urllib.request.Request(xpuri)
+            with urllib.request.urlopen(req) as response:
+                apage = response.read()
+            escaped_html = html.escape(apage)
+            # Create iframe embedding the escaped HTML and display it
+            iframe_html = f'<iframe srcdoc="{escaped_html}" style="height:100%; width:100%" frameborder="0"></iframe>'
+            # Display iframe in a Panel HTML pane
+            pn.pane.HTML(iframe_html, height=350, sizing_mode="stretch_width")
+
+
+        def showX(x, y):
+            if np.isnan(x):
+                s = "Mouse click on image for location"
+            else:
+                i = bisect_left(h1starts, x)
+                chrx = h1names[i - 1]
+                offsx = x - h1starts[i - 1]
+                s = "%s:%d" % (chrx, offsx)
+                xi = bisect_left(segs[xcf], x)
+                xtarget = segs["target"][xi]
+                s += " x %s" % (xtarget)
+
+            str_pane = pn.pane.Str(
+                s,
+                styles={
+                    "font-size": "10pt",
+                    "color": "darkblue",
+                    "text-align": "center",
+                },
+                width=pwidth,
+            )
+            return str_pane
+
+        (hsDims, hapsread, xcoords, ycoords, annos, plotType, metadata, gffdata, hh) = (
+            self.import_holoSeq_data(inFile)
+        )
+        xcf = os.path.splitext(metadata["xclenfile"][0])[0]
+        segs = {
+            xcf: [],
+            "x2": [],
+            "wy1": [],
+            "y2": [],
+            "target": [],
+            "colour": [],
+            "thickness": [],
+            "alpha": [],
+        }
+        """
+cds XP_026238700.1 1401967516 1401967635 100 100 - 204
+mrna XP_026248570.1 SUPER_3H1 531341254 531595863 100 100 + 1102 -1
+cds XP_026248570.1 531341254 531341334 100 100 + 134
+        """
+        mthick = 3
+        cdthick = 50
+        for i, rows in enumerate(gffdata):
+            if rows[0].lower() == "mrna":
+                (kind, targ, contig, startp, endp, y1, y2, strand, score) = rows[:10]
+                startp = int(startp)
+                endp = int(endp)
+                y1 = int(y1)
+                y2 = int(y2)
+                colr = "blue"
+                if strand == "-":
+                    colr = "maroon"
+                segs["target"].append(targ)
+                segs[xcf].append(startp)
+                segs["x2"].append(endp)
+                segs["wy1"].append(y1)
+                segs["y2"].append(y2)
+                segs["colour"].append(colr)
+                segs["thickness"].append(mthick)
+                segs["alpha"].append(1.0)
+                # segs["stopc"].append(stopc)
+            elif (
+                rows[0].lower() == "cds"
+            ):  #  f"cds {targ} {con} {startp} {endp} {y} {y} {strand} {score}\n"
+                (kind, targ, contig, startp, endp, y1, y2, strand, score) = rows[:10]
+                startp = int(startp)
+                endp = int(endp)
+                y = int(y1)
+                colr = "blue"
+                if strand == "-":
+                    colr = "maroon"
+                segs["target"].append(targ)
+                segs[xcf].append(startp)
+                segs["x2"].append(endp)
+                segs["wy1"].append(y)
+                segs["y2"].append(y)
+                segs["colour"].append(colr)
+                segs["thickness"].append(cdthick)
+                segs["alpha"].append(1.0)
+        title = " ".join(metadata["title"])
+        haps = []
+        print("GFF rows read =", len(gffdata))
+        h1starts = []
+        h1names = []
+        qtic1 = []
+        for i, hap in enumerate(hapsread.keys()):
+            haps.append(hap)
+            for j, contig in enumerate(hapsread[hap]["cn"]):
+                cstart = hapsread[hap]["startpos"][j]
+                h1starts.append(cstart)
+                h1names.append(contig)
+                qtic1.append((cstart, contig))
+        hap = haps[0]
+        # print("h1names=", h1names[:20])
+        # qtic1 = [(hqstarts[hap][x], x) for x in hqstarts[hap].keys()]
+        # print("qtic1=", qtic1[:20])
+        gffp = hv.Segments(
+            segs,
+            [xcf, "wy1", "x2", "y2"],
+            vdims=["target", "colour", "thickness", "alpha"],
+        )
+
+        gffp.opts(
+            title="title",
+            color="colour",
+            line_width="thickness",
+            alpha="alpha",
+            width=pwidth,
+            height=300,
+            xticks=qtic1,
+            xrotation=45,
+            scalebar=True,
+            scalebar_range="x",
+            scalebar_location="bottom_left",
+            scalebar_unit=("bp"),
+            fontsize={"xticks": 8, "yticks": 10},
+            show_grid=True,
+            autorange="y",
+            tools=[
+                "xwheel_zoom",
+                "box_zoom",
+                "tap",
+                "xpan",
+                "reset",
+            ],
+            default_tools=[],
+            active_tools=["xwheel_zoom", "tap", "xpan"],
+            shared_axes=True,
+        )
+        apply_when(gffp, operation=rasterize, predicate=lambda x: len(x) > 5000)
+        taps = hv.streams.Tap(source=gffp, x=0, y=0)
+        showloc = pn.bind(showX, x=taps.param.x, y=taps.param.y)
+        gp = pn.pane.HoloViews(gffp)
+        p = pn.Column(showloc, gp)
+
+        return p, title
+
+
