@@ -35,20 +35,24 @@ class gff:
     """
 
     def __init__(self, gff, outFname, contigs, args):
-        mrnaseen = {}
-        segs = {}
-        comment = "#"
+        self.mrnaseen = {}
+        self.segs = {}
+        self.comment = "#"
         self.hsId = VALID_HSEQ_FORMATS[0]
         self.inFname = gff
-        log.debug("contigs=%s" % str(contigs)[:1000])
-        with open(gff) as g:
+        self.outFname = outFname
+        self.args = args
+        log.debug("contigs=%s" % str(self.contigs)[:1000])
+    
+    def precompute(self):
+        with open(self.inFname) as g:
             for i, row in enumerate(g):
-                if not row.startswith(comment):
+                if not row.startswith(self.comment):
                     (id, name, kind, startp, endp, score, strand, phase, text) = [
                         x.strip() for x in row.split()[:9]
                     ]
-                    if not segs.get(id, None):
-                        segs[id] = []
+                    if not self.segs.get(id, None):
+                        self.segs[id] = []
                     if kind.lower() in ["cds", "mrna"]:
                         anno = text.split(";")
                         tanno = [
@@ -59,26 +63,26 @@ class gff:
                         target = tanno[0]
                     startp = int(startp)
                     endp = int(endp)
-                    offset = contigs.get(id, -1)
-                    if args.addH1 and offset < 0:
-                        offset = contigs.get(id + "H1", -1)
+                    offset = self.contigs.get(id, -1)
+                    if self.args.addH1 and offset < 0:
+                        offset = self.contigs.get(id + "H1", -1)
                         id = id + "H1"
                     if offset < 0:
                         log.warn(
                             "Ignored gff3 id %s missing from supplied xcontigs, in row %d %s of %s with addH1=%s"
-                            % (id, i, row, gff, args.addH1)
+                            % (id, i, row, gff, self.args.addH1)
                         )
                     else:
                         if kind.lower() == "mrna":
                             if target:
-                                if mrnaseen.get(target, None):
+                                if self.mrnaseen.get(target, None):
                                     log.debug(
                                         "Seeing mrna target %s again at row %d"
                                         % (target, i)
                                     )
                                 else:
-                                    mrnaseen[target] = target
-                                segs[id].append(
+                                    self.mrnaseen[target] = target
+                                self.segs[id].append(
                                     (
                                         startp + offset,
                                         endp + offset,
@@ -91,9 +95,9 @@ class gff:
                             else:
                                 log.warn("no target found in %s at row %d" % (text, i))
                         elif kind.lower() == "stop_codon":
-                            segs[id].append((startp + offset, target, "stopc"))
+                            self.segs[id].append((startp + offset, target, "stopc"))
                         elif kind.lower() == "cds":
-                            segs[id].append(
+                            self.segs[id].append(
                                 (
                                     startp + offset,
                                     endp + offset,
@@ -103,10 +107,9 @@ class gff:
                                     "cds",
                                 )
                             )
+        self.export( )
 
-        self.export_mapping(outFname, contigs, segs, args)
-
-    def export(self, outFname, contigs, segs, args):
+    def export(self):
         """
         for GFF
         @v1HoloSeq2D for example
@@ -115,19 +118,19 @@ class gff:
         Y is reset if no overlap
         """
 
-        def prepHeader(contigs, args):
+        def prepHeader():
             """
             holoSeq output format
             """
-            h = ["@%s %s %d" % (holoseq_data.getHap(k), k, contigs[k]) for k in contigs.keys()]
+            h = ["@%s %s %d" % (holoseq_data.getHap(k), k, self.contigs[k]) for k in self.contigs.keys()]
             metah = [
                 self.hsId,
-                "@@GFF 1",
-                "@@title %s" % args.title,
+                "@@class GFF",
+                "@@title %s" % self.args.title,
                 "@@datasource GFF",
                 "@@datafile %s" % self.inFname,
-                "@@refURI %s" % args.refURI,
-                "@@xclenfile %s" % args.xclenfile,
+                "@@refURI %s" % self.args.refURI,
+                "@@xclenfile %s" % self.args.xclenfile,
             ]
 
             return metah + h
@@ -138,14 +141,14 @@ class gff:
                 return False
             return x1 <= y2 and y1 <= x2
 
-        hdr = prepHeader(contigs, args)
+        hdr = prepHeader()
 
-        with gzip.open(outFname, mode="wb") as ofn:
+        with gzip.open(self.outFname, mode="wb") as ofn:
             ofn.write(str.encode("\n".join(hdr) + "\n"))
             y = 100
-            for con in contigs.keys():
+            for con in self.contigs.keys():
                 lastseg = ("", 0, 0)
-                subs = segs.get(con, [])
+                subs = self.segs.get(con, [])
                 if len(subs) > 0:
                     subs.sort(key=lambda x: x[0])
                     for i, m in enumerate(subs):
@@ -172,7 +175,7 @@ class gff:
                             row = str.encode(f"stopc {targ} {con} {startp}\n")
                             ofn.write(row)
 
-    def makeGFFPanel(self, inFile, pwidth):
+    def makePanel(self, inFile, pwidth):
         """
                 prepare a complete panel for the final display
         https://www.ncbi.nlm.nih.gov/gene/?term=XP_026235740.1

@@ -58,22 +58,27 @@ class bigwig:
 
     def __init__(self, inFname, outFname, args, contigs):
         self.inFname = inFname
+        self.outFname = outFname
+        self.args = args
         self.hsId = VALID_HSEQ_FORMATS[0]
+        self.contigs = contigs
+
+    def precompute(self):
         fakepath = "in.bw"
         if os.path.isfile(fakepath):
             os.remove(fakepath)
         p = Path(fakepath)
-        p.symlink_to(inFname)  # required by pybigtools (!)
+        p.symlink_to(self.inFname)  # required by pybigtools (!)
         bwf = pybigtools.open(fakepath)
         bchrlist = bwf.chroms()
         bwchrs = list(bchrlist.keys())
         bwdata = {}
         for i, bchr in enumerate(bwchrs):
             cchr = bchr
-            if (not contigs.get(bchr, None)) and args.addH1:
+            if (not self.contigs.get(bchr, None)) and self.args.addH1:
                 cchr = cchr + "H1"
-            if contigs.get(cchr, None):
-                cstart = contigs[cchr]
+            if self.contigs.get(cchr, None):
+                cstart = self.contigs[cchr]
                 bwdata[cchr] = {}
                 bw = bwf.records(bchr)
                 # Return the records of a given range on a chromosome. The result is an iterator of tuples. For BigWigs, these tuples are in the format (start: int, end: int, value: float).
@@ -86,34 +91,34 @@ class bigwig:
                 log.warn(
                     "Bigwig contig %s not found in supplied X axis lengths file" % cchr
                 )
-        self.export_mapping(outFname, contigs, bwdata, args)
+        self.export(bwdata)
 
-    def export(self, outFname, contigs, bwdata, args):
+    def export(self, bwdata):
         """
         for bigwig
         @v1HoloSeq2D for example
         """
 
-        def prepHeader(contigs, args):
+        def prepHeader():
             """
             holoSeq output format
             """
-            h = ["@%s %s %d" % (holoseq_data.getHap(k), k, contigs[k]) for k in contigs.keys()]
+            h = ["@%s %s %d" % (holoseq_data.getHap(k), k, self.contigs[k]) for k in self.contigs.keys()]
             metah = [
                 self.hsId,
-                "@@bigwig 1",
-                "@@title %s" % args.title,
+                "@@class bigwig",
+                "@@title %s" % self.args.title,
                 "@@datasource %s" % "bigwig",
                 "@@datafile %s" % self.inFname,
-                "@@refURI %s" % args.refURI,
-                "@@xclenfile %s" % args.xclenfile,
+                "@@refURI %s" % self.args.refURI,
+                "@@xclenfile %s" % self.args.xclenfile,
             ]
 
             return metah + h
 
-        hdr = prepHeader(contigs, args)
+        hdr = prepHeader()
 
-        with gzip.open(outFname, mode="wb") as ofn:
+        with gzip.open(self.outFname, mode="wb") as ofn:
             ofn.write(str.encode("\n".join(hdr) + "\n"))
             for chr in bwdata.keys():
                 for i in range(len(bwdata[chr]["xstart"])):

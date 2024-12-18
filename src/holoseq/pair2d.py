@@ -74,6 +74,8 @@ class pair2d:
         """
         if rotating paf line at a time, better to pre-calculate the constants once rather than once for each point
         """
+        self.inFname = inFname
+        self.args = args
         self.rot = rotater(xwidth, ywidth)
         self.rotate = args.rotate
         self.rot.onepointRot = True
@@ -87,7 +89,7 @@ class pair2d:
         # adding tooltips just does not scale so abandoned - see the tooltip old version
         hsId = VALID_HSEQ_FORMATS[1]
         self.inFname = inFname
-        self.prepPafGZ(hsId, haps, xcontigs, ycontigs, args)
+        self.prepPafGZ(hsId, haps, xcontigs, ycontigs)
         if self.isGzip(inFname):
             with gzip.open(inFname, "rt") as f:
                 self.readPAF(f)
@@ -358,7 +360,7 @@ class pair2d:
                 log.info("inFname %s is not a gzip so will read as text" % inFname)
                 return False
 
-    def prepPafGZ(self, hsId, haps, xcontigs, ycontigs, args):
+    def prepPafGZ(self, hsId, haps, xcontigs, ycontigs):
         """
         A pairwise 2d plot involves a genome for each axis.
         A paf or HiC track file contains pairs of coordinates (contig, offset).
@@ -395,11 +397,11 @@ class pair2d:
                 ]
             metah = [
                 hsId,
-                "@@heatmap",
-                "@@title %s" % args.title + subtitle,
+                "@@class heatmap",
+                "@@title %s" % self.args.title + subtitle,
                 "@@datasource %s" % "paf",
                 "@@datafile %s" % self.inFname,
-                "@@refURI %s" % args.refURI,
+                "@@refURI %s" % self.args.refURI,
                 "@@xclenfile %s" % xclenfile,
                 "@@yclenfile %s" % yclenfile,
                 "@@axes %s" % ax,
@@ -420,11 +422,11 @@ class pair2d:
             hsId,
             xcontigs,
             xcontigs,
-            args,
+            self.args,
             self.cis1f,
             " Pairs on %s" % haps[0],
-            xclenfile=args.xclenfile,
-            yclenfile=args.xclenfile,
+            xclenfile=self.args.xclenfile,
+            yclenfile=self.args.xclenfile,
             ax=haps[0],
         )
         fn2 = "%s_cis%s_hseq.gz" % (self.inFname, haps[1])
@@ -438,11 +440,11 @@ class pair2d:
             hsId,
             ycontigs,
             ycontigs,
-            args,
+            self.args,
             self.cis2f,
             " Pairs on %s" % haps[1],
-            xclenfile=args.yclenfile,
-            yclenfile=args.yclenfile,
+            xclenfile=self.args.yclenfile,
+            yclenfile=self.args.yclenfile,
             ax=haps[1],
         )
         fn3 = "%s_trans_hseq.gz" % (self.inFname)
@@ -456,10 +458,10 @@ class pair2d:
             hsId,
             xcontigs,
             ycontigs,
-            args,
+            self.args,
             self.transf,
             " Pairs on different haplotypes",
-            xclenfile=args.xclenfile,
-            yclenfile=args.yclenfile,
+            xclenfile=self.args.xclenfile,
+            yclenfile=self.args.yclenfile,
             ax="BOTH",
         )

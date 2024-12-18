@@ -1,4 +1,4 @@
-# holoSeq compressed pre-computed plots
+# holoSeq compressed pre-computed plot data utilities
 
 import array
 from collections import OrderedDict
@@ -11,9 +11,10 @@ import logging
 
 
 import re
+import sys
 
-from holoseq.config import VALID_HSEQ_FORMATS
-from holoseq.exceptions import HoloSeqFormatError
+from config import VALID_HSEQ_FORMATS
+from exceptions import HoloSeqFormatError
 
 
 logging.basicConfig(level=logging.DEBUG)
@@ -296,3 +297,27 @@ def load(path: Path):
             hh.append(hh[0])
         hh.sort()
         return (num_dimensions, haploids, x_coords, y_coords, annotations, plot_type, metadata, gff_data, hh, rotated)
+
+def getMetadata(path: Path):
+    metadata = {}
+
+    with gzip.open(path, "rt") as f:
+        for i, line in enumerate(f):
+            # Check if we have a valid holoSeq file using the first line as a header, and raise an
+            # error if it is not.
+            if i == 0:
+                valid, num_dimensions, plot_type = is_valid_header(line)
+                continue
+
+            if line[0] == "@":
+                row = line[1:]
+                if row[0] == "@":
+                    tokens = [token.strip() for token in row[1:].split()]
+                    metadata[tokens[0]] = tokens[1:]
+            else:
+                break
+    return valid, metadata 
+
+if __name__ == "__main__":
+    # print first parameter metadata
+    print(getMetadata(sys.argv[1]))
