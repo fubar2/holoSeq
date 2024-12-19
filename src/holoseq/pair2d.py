@@ -23,7 +23,7 @@ import panel as pn
 
 from config import VALID_HSEQ_FORMATS
 
-from holoseq import holoseq_data
+import holoseq_data
 
 from rotater import rotater
 
