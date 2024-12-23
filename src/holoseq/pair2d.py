@@ -86,6 +86,7 @@ class pair2d:
         # have the axes set up so prepare the three plot x/y vectors
         self.hsId = VALID_HSEQ_FORMATS[1]
         self.inFname = inFname
+        self.hap_indicator=args.hap_indicator
 
     def convert(self):
         self.prepPafGZ()
@@ -112,8 +113,8 @@ class pair2d:
                 c2 = row[5]
                 n1 = int(row[2])
                 n2 = int(row[7])
-                H1 = holoseq_data.getHap(c1)
-                H2 = holoseq_data.getHap(c2)
+                H1 = holoseq_data.getHap(c1, hap_indicator= self.hap_indicator)
+                H2 = holoseq_data.getHap(c2, hap_indicator= self.hap_indicator)
                 if H1 != H2:  # trans
                     if H1 == self.haps[0]:  # x is h1 for trans - otherwise ignore
                         x = self.xcontigs[c1] + n1
@@ -125,7 +126,7 @@ class pair2d:
                                 x = None
                         if x is not None:
                             row = "%d %d\n" % (x, y)
-                            self.transf.write(row.encode("utf-8"))
+                            self.transfio.write(row)
                             self.nrtrans += 1
                     else:
                         x = self.xcontigs[c2] + n2
@@ -137,7 +138,7 @@ class pair2d:
                                 x = None
                         if x is not None:
                             row ="%d %d\n" % (x, y)
-                            self.transfio.write(row.encode("utf-8"))
+                            self.transfio.write(row)
                             self.nrtrans += 1
                 else:  # cis
                     if H1 == self.haps[0]:
@@ -150,7 +151,7 @@ class pair2d:
                                 x = None
                         if x is not None:
                             row = "%d %d\n" % (x, y)
-                            self.cis1fio.write(row.encode("utf-8"))
+                            self.cis1fio.write(row)
                             self.nrcis1 += 1
                     else:
                         x = self.ycontigs[c1] + n1
@@ -162,7 +163,7 @@ class pair2d:
                                 x = None
                         if x is not None:
                             row = "%d %d\n" % (x, y)
-                            self.cis2fio.write(row.encode("utf-8"))
+                            self.cis2fio.write(row)
                             self.nrcis2 += 1
         log.debug(
             "nrcis1=%d, nrcis2=%d, nrtrans=%d" % (self.nrcis1, self.nrcis2, self.nrtrans)
@@ -204,12 +205,12 @@ class pair2d:
             prepare the three potentially needed gzip output channels
             """
             h = [
-                "@%s %s %d" % (holoseq_data.getHap(k), k, xcontigs[k])
+                "@%s %s %d" % (holoseq_data.getHap(k, hap_indicator= self.hap_indicator), k, xcontigs[k])
                 for k in xcontigs.keys()
             ]
             if len(haps) > 1:
                 h += [
-                    "@%s %s %d" % (holoseq_data.getHap(k), k, ycontigs[k])
+                    "@%s %s %d" % (holoseq_data.getHap(k, hap_indicator= self.hap_indicator), k, ycontigs[k])
                     for k in ycontigs.keys()
                 ]
             metah = [
@@ -225,14 +226,14 @@ class pair2d:
                 "@@rotated %s" % self.rotate,
             ]
             menc = metah + h
-            outs = '\n'.join(menc).encode("utf-8")
+            outs = '\n'.join(menc)
             outf.write(outs)
 
         fn1 = "%s_cis%s_hseq.gz" % (self.inFname, self.haps[0])
         if self.rotate:
             fn1 = "%s_rotated_cis%s_hseq.gz" % (self.inFname, self.haps[0])
         self.cis0n = fn1
-        self.cis1fio= gzip.open(fn1, mode="wb")
+        self.cis1fio = gzip.open(fn1, mode="wt")
         prepHeader(
             self.haps[0],
             self.hsId,
@@ -248,9 +249,8 @@ class pair2d:
         fn2 = "%s_cis%s_hseq.gz" % (self.inFname, self.haps[1])
         if self.rotate:
             fn2 = "%s_rotated_cis%s_hseq.gz" % (self.inFname, self.haps[1])
-        self.cis2fio = gzip.open(fn2, mode="wb")
+        self.cis2fio = gzip.open(fn2, mode="wt")
         self.cis1n = fn2
-        self.cis2fio = gzip.open(fn2, mode="wb")
         prepHeader(
             self.haps[1],
             self.hsId,
@@ -267,7 +267,7 @@ class pair2d:
         self.trans1n = fn3
         if self.rotate:
             fn3 = "%s_rotated_trans_hseq.gz" % (self.inFname)
-        self.transfio = gzip.open(fn3, mode="wb")
+        self.transfio = gzip.open(fn3, mode="wt")
         prepHeader(
             self.haps,
             self.hsId,

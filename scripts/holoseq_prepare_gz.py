@@ -115,7 +115,7 @@ if __name__ == "__main__":
         log.debug("extending haps %s" % haps)
         haps.append(haps[0])
     log.debug('***haps %s' % haps)
-    ps = args.inFtype
+    ps = args.inFtype.lower()
     log.debug("inFile=%s, ftype = %s" % (args.inFile, ps))
 
     if ps == "pair2d":

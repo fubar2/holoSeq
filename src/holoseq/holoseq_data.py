@@ -21,7 +21,7 @@ logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger("holoseq_prepare")
 
 
-def getHap(contig, hap_indicator="None"):
+def getHap(contig, hap_indicator="Suffix"):
     """
     vgp has 2 haplotypes and these need to be distinguished in tracks, so often have a suffix like "H1"
 
