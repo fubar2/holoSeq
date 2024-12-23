@@ -1,5 +1,5 @@
 # 2d heatmaps from paf or hic tracks in holoSeq
-# has functions to read a paf and write a hseq.gz, and to prepare a panel showing that hseq.gz 
+# has functions to read a paf and write a hseq.gz, and to prepare a panel showing that hseq.gz
 # using the generic  holoseq_.load function
 # need to add the hic code here too
 
@@ -14,11 +14,9 @@ import os
 import sys
 
 
-
 import holoviews as hv
 import pandas as pd
 import panel as pn
-
 
 
 from config import VALID_HSEQ_FORMATS
@@ -32,7 +30,8 @@ from holoviews.operation.datashader import (
     rasterize,
     dynspread,
 )
-#from holoviews.operation.element import apply_when
+
+# from holoviews.operation.element import apply_when
 from holoviews.operation.resample import ResampleOperation2D
 from holoviews.operation import decimate
 
@@ -72,7 +71,7 @@ class pair2d:
 
     def __init__(self, inFname, args, xcontigs, ycontigs, haps, xwidth, ywidth):
         """
-        if rotating paf line at a time, better to pre-calculate the constants once rather than once for each point
+        if rotating, prepare a rotater
         """
         self.inFname = inFname
         self.args = args
@@ -85,20 +84,202 @@ class pair2d:
         self.ycontigs = ycontigs
         self.haps = haps
         # have the axes set up so prepare the three plot x/y vectors
-        # for a second pass to calculate all the coordinates.
-        # adding tooltips just does not scale so abandoned - see the tooltip old version
-        hsId = VALID_HSEQ_FORMATS[1]
+        self.hsId = VALID_HSEQ_FORMATS[1]
         self.inFname = inFname
-        self.prepPafGZ(hsId, haps, xcontigs, ycontigs)
-        if self.isGzip(inFname):
-            with gzip.open(inFname, "rt") as f:
+
+    def convert(self):
+        self.prepPafGZ()
+        if self.isGzip(self.inFname):
+            with gzip.open(self.inFname, "rt") as f:
                 self.readPAF(f)
         else:
-            with open(inFname) as f:
+            with open(self.inFname) as f:
                 self.readPAF(f)
-        self.cis1f.close()
-        self.cis2f.close()
-        self.transf.close()
+        self.cis1fio.close()
+        self.cis2fio.close()
+        self.transfio.close()
+        return self.cis0n, self.cis1n, self.trans1n
+
+    def readPAF(self, f):
+        # file is text even if gz
+        # parse a paf
+        # into metadata and coordinates
+        self.nrcis1 = self.nrcis2 = self.nrtrans = 0
+        for rowi, rows in enumerate(f):
+            row = rows.strip().split()
+            if len(row) >= 7:
+                c1 = row[0]
+                c2 = row[5]
+                n1 = int(row[2])
+                n2 = int(row[7])
+                H1 = holoseq_data.getHap(c1)
+                H2 = holoseq_data.getHap(c2)
+                if H1 != H2:  # trans
+                    if H1 == self.haps[0]:  # x is h1 for trans - otherwise ignore
+                        x = self.xcontigs[c1] + n1
+                        y = self.ycontigs[c2] + n2
+                        if self.rotate:
+                            if y <= x:  # lower triangle
+                                x, y = self.rot.rotatecoords(x, y, True)
+                            else:
+                                x = None
+                        if x is not None:
+                            row = "%d %d\n" % (x, y)
+                            self.transf.write(row.encode("utf-8"))
+                            self.nrtrans += 1
+                    else:
+                        x = self.xcontigs[c2] + n2
+                        y = self.ycontigs[c1] + n1
+                        if self.rotate:
+                            if y <= x:  # lower triangle
+                                x, y = self.rot.rotatecoords(xin=x, yin=y, adjust=True)
+                            else:
+                                x = None
+                        if x is not None:
+                            row ="%d %d\n" % (x, y)
+                            self.transfio.write(row.encode("utf-8"))
+                            self.nrtrans += 1
+                else:  # cis
+                    if H1 == self.haps[0]:
+                        x = self.xcontigs[c1] + n1
+                        y = self.xcontigs[c2] + n2
+                        if self.rotate:
+                            if y <= x:  # lower triangle
+                                x, y = self.rot.rotatecoords(xin=x, yin=y, adjust=True)
+                            else:
+                                x = None
+                        if x is not None:
+                            row = "%d %d\n" % (x, y)
+                            self.cis1fio.write(row.encode("utf-8"))
+                            self.nrcis1 += 1
+                    else:
+                        x = self.ycontigs[c1] + n1
+                        y = self.ycontigs[c2] + n2
+                        if self.rotate:
+                            if y <= x:  # lower triangle
+                                x, y = self.rot.rotatecoords(xin=x, yin=y, adjust=True)
+                            else:
+                                x = None
+                        if x is not None:
+                            row = "%d %d\n" % (x, y)
+                            self.cis2fio.write(row.encode("utf-8"))
+                            self.nrcis2 += 1
+        log.debug(
+            "nrcis1=%d, nrcis2=%d, nrtrans=%d" % (self.nrcis1, self.nrcis2, self.nrtrans)
+        )
+
+    def isGzip(self, inFname):
+        with gzip.open(inFname, "r") as fh:
+            try:
+                fh.read(1)
+                return True
+            except gzip.BadGzipFile:
+                log.info("inFname %s is not a gzip so will read as text" % inFname)
+                return False
+
+    def prepPafGZ(self):
+        """
+        write a holoseq paired gzip metadata and coordinates
+        for plotting by the makepanel function
+        """
+
+        def prepHeader(
+            haps,
+            hsId,
+            xcontigs,
+            ycontigs,
+            args,
+            outf,
+            subtitle,
+            xclenfile,
+            yclenfile,
+            ax,
+        ):
+            """
+            Depending on the configuration,Mashmap sequence similarity paf output pairs may both be coordinates on contigs from the same haplotype, or from different ones.
+            HiC data usually has two possible haplotypes.
+            So typically 3 kinds of pairs - same haplotype termed "cis" and different termed "trans"
+            That's not how those words are usually used but it seems a natural extension for HiC
+
+            prepare the three potentially needed gzip output channels
+            """
+            h = [
+                "@%s %s %d" % (holoseq_data.getHap(k), k, xcontigs[k])
+                for k in xcontigs.keys()
+            ]
+            if len(haps) > 1:
+                h += [
+                    "@%s %s %d" % (holoseq_data.getHap(k), k, ycontigs[k])
+                    for k in ycontigs.keys()
+                ]
+            metah = [
+                hsId,
+                "@@class heatmap",
+                "@@title %s" % self.args.title + subtitle,
+                "@@datasource %s" % "paf",
+                "@@datafile %s" % self.inFname,
+                "@@refURI %s" % self.args.refURI,
+                "@@xclenfile %s" % xclenfile,
+                "@@yclenfile %s" % yclenfile,
+                "@@axes %s" % ax,
+                "@@rotated %s" % self.rotate,
+            ]
+            menc = metah + h
+            outs = '\n'.join(menc).encode("utf-8")
+            outf.write(outs)
+
+        fn1 = "%s_cis%s_hseq.gz" % (self.inFname, self.haps[0])
+        if self.rotate:
+            fn1 = "%s_rotated_cis%s_hseq.gz" % (self.inFname, self.haps[0])
+        self.cis0n = fn1
+        self.cis1fio= gzip.open(fn1, mode="wb")
+        prepHeader(
+            self.haps[0],
+            self.hsId,
+            self.xcontigs,
+            self.xcontigs,
+            self.args,
+            self.cis1fio,
+            " Pairs on %s" % self.haps[0],
+            xclenfile=self.args.xclenfile,
+            yclenfile=self.args.xclenfile,
+            ax=self.haps[0],
+        )
+        fn2 = "%s_cis%s_hseq.gz" % (self.inFname, self.haps[1])
+        if self.rotate:
+            fn2 = "%s_rotated_cis%s_hseq.gz" % (self.inFname, self.haps[1])
+        self.cis2fio = gzip.open(fn2, mode="wb")
+        self.cis1n = fn2
+        self.cis2fio = gzip.open(fn2, mode="wb")
+        prepHeader(
+            self.haps[1],
+            self.hsId,
+            self.ycontigs,
+            self.ycontigs,
+            self.args,
+            self.cis2fio,
+            " Pairs on %s" % self.haps[1],
+            xclenfile=self.args.yclenfile,
+            yclenfile=self.args.yclenfile,
+            ax=self.haps[1],
+        )
+        fn3 = "%s_trans_hseq.gz" % (self.inFname)
+        self.trans1n = fn3
+        if self.rotate:
+            fn3 = "%s_rotated_trans_hseq.gz" % (self.inFname)
+        self.transfio = gzip.open(fn3, mode="wb")
+        prepHeader(
+            self.haps,
+            self.hsId,
+            self.xcontigs,
+            self.ycontigs,
+            self.args,
+            self.transfio,
+            " Pairs on different haplotypes",
+            xclenfile=self.args.xclenfile,
+            yclenfile=self.args.yclenfile,
+            ax="BOTH",
+        )
 
 
     def makePanel(self, inFile, pwidth):
@@ -126,15 +307,18 @@ class pair2d:
                     if i > 0 and i <= len(cynames):
                         chry = cynames[i - 1]
                         offsy = yur - cystarts[i - 1]
-                    s = "Rotated X axis genome %s:%d Rotated Y axis genome %s:%d x %d y %d xur %d yur %d" % (
-                        chrx,
-                        offsx,
-                        chry,
-                        offsy,
-                        x,
-                        y,
-                        xur,
-                        yur,
+                    s = (
+                        "Rotated X axis genome %s:%d Rotated Y axis genome %s:%d x %d y %d xur %d yur %d"
+                        % (
+                            chrx,
+                            offsx,
+                            chry,
+                            offsy,
+                            x,
+                            y,
+                            xur,
+                            yur,
+                        )
                     )
                 else:
                     i = bisect_left(cxstarts, x)
@@ -145,16 +329,19 @@ class pair2d:
                     if i > 0 and i <= len(cynames):
                         chry = cynames[i - 1]
                         offsy = y - cystarts[i - 1]
-                    s = "X axis genome %s:%d Y axis genome %s:%d x %d y %d xur %d yur %d" % (
-                chrx,
-                offsx,
-                chry,
-                offsy,
-                x,
-                y,
-                xur,
-                yur,
-            )
+                    s = (
+                        "X axis genome %s:%d Y axis genome %s:%d x %d y %d xur %d yur %d"
+                        % (
+                            chrx,
+                            offsx,
+                            chry,
+                            offsy,
+                            x,
+                            y,
+                            xur,
+                            yur,
+                        )
+                    )
             str_pane = pn.pane.Str(
                 s,
                 styles={
@@ -169,8 +356,13 @@ class pair2d:
         (hsDims, hapsread, xcoords, ycoords, annos, plotType, metadata, gffdata, hh) = (
             holoseq_data.load(inFile)
         )
-        self.rotated = metadata.get("rotated", [False,])[0]
-        print('rotated', self.rotated)
+        self.rotated = metadata.get(
+            "rotated",
+            [
+                False,
+            ],
+        )[0]
+        print("rotated", self.rotated)
         rot = rotater(max(xcoords), max(ycoords))
         title = " ".join(metadata["title"])
         hqstarts = OrderedDict()
@@ -199,8 +391,8 @@ class pair2d:
             log.warn("only one haplotype read for %s" % title)
         qtic1 = [(h1starts[i], h1names[i]) for i in range(len(h1starts))]
         hap = hh[1]
-        if self.rotated: # yaxis makes no real sense
-            qtic2 = [(0,'')]
+        if self.rotated:  # yaxis makes no real sense
+            qtic2 = [(0, "")]
         else:
             qtic2 = [(h2starts[i], h2names[i]) for i in range(len(h2starts))]
         # once the pairs have been read and mapped into a grid, the code
@@ -286,182 +478,3 @@ class pair2d:
             ),
         )
         return p1, title
-
-    def readPAF(self, f):
-        # might be a gz
-        self.nrcis1 = self.nrcis2 = self.nrtrans = 0
-        for rowi, rows in enumerate(f):
-            row = rows.strip().split()
-            if len(row) > 7:
-                c1 = row[0]
-                c2 = row[5]
-                n1 = int(row[2])
-                n2 = int(row[7])
-                H1 =  holoseq_data.getHap(c1)
-                H2 =  holoseq_data.getHap(c2)
-                if H1 != H2:  # trans
-                    if H1 == self.haps[0]:  # x is h1 for trans - otherwise ignore
-                        x = self.xcontigs[c1] + n1
-                        y = self.ycontigs[c2] + n2
-                        if self.rotate:
-                            if y <= x:  # lower triangle
-                                x, y = self.rot.rotatecoords(x, y, True)
-                            else:
-                                x = None
-                        if x is not None:
-                            row = str.encode("%d %d\n" % (x, y))
-                            self.transf.write(row)
-                            self.nrtrans += 1
-                    else:
-                        x = self.xcontigs[c2] + n2
-                        y = self.ycontigs[c1] + n1
-                        if self.rotate:
-                            if y <= x:  # lower triangle
-                                x, y = self.rot.rotatecoords(xin=x, yin=y, adjust=True)
-                            else:
-                                x = None
-                        if x is not None:
-                            row = str.encode("%d %d\n" % (x, y))
-                            self.transf.write(row)
-                            self.nrtrans += 1
-                else:  # cis
-                    if H1 == self.haps[0]:
-                        x = self.xcontigs[c1] + n1
-                        y = self.xcontigs[c2] + n2
-                        if self.rotate:
-                            if y <= x:  # lower triangle
-                                x, y = self.rot.rotatecoords(xin=x, yin=y, adjust=True)
-                            else:
-                                x = None
-                        if x is not None:
-                            row = str.encode("%d %d\n" % (x, y))
-                            self.cis1f.write(row)
-                            self.nrcis1 += 1
-                    else:
-                        x = self.ycontigs[c1] + n1
-                        y = self.ycontigs[c2] + n2
-                        if self.rotate:
-                            if y <= x:  # lower triangle
-                                x, y = self.rot.rotatecoords(xin=x, yin=y, adjust=True)
-                            else:
-                                x = None
-                        if x is not None:
-                            row = str.encode("%d %d\n" % (x, y))
-                            self.cis2f.write(row)
-                            self.nrcis2 += 1
-        log.debug("nrcis1=%d, nris2=%d, nrtrans=%d" % (self.nrcis1, self.nrcis2, self.nrtrans))
-
-    def isGzip(self, inFname):
-        with gzip.open(inFname, "r") as fh:
-            try:
-                fh.read(1)
-                return True
-            except gzip.BadGzipFile:
-                log.info("inFname %s is not a gzip so will read as text" % inFname)
-                return False
-
-    def prepPafGZ(self, hsId, haps, xcontigs, ycontigs):
-        """
-        A pairwise 2d plot involves a genome for each axis.
-        A paf or HiC track file contains pairs of coordinates (contig, offset).
-        Both coordinates might be on the same genome (termed "cis" in this 2 haplotype context).
-        It is also possible that the coordinates are on two separate genomes (termed "trans" here). 
-        Pairs are typically binned to downscale the plot density for HiC pairs, and this distinction is usually ignored - all pairs starting or ending in the window 
-        are counted, no matter which haplotype is involved. This may help smooth the  holoseq_ and make it easier to visualise, but it throws away a lot of information
-        For individual points, it may be interesting to see the raw  holoseq_ but that requires plot axes 
-        to correspond precisely to the genome lengths file, for the coordinates to be correct.
-        """
-
-        def prepHeader(
-            haps,
-            hsId,
-            xcontigs,
-            ycontigs,
-            args,
-            outf,
-            subtitle,
-            xclenfile,
-            yclenfile,
-            ax,
-        ):
-            """
-            holoSeq output format - prepare gzip output channels
-            """
-            h = [
-                "@%s %s %d" % ( holoseq_data.getHap(k), k, xcontigs[k]) for k in xcontigs.keys()
-            ]
-            if len(haps) > 1:
-                h += [
-                    "@%s %s %d" % ( holoseq_data.getHap(k), k, ycontigs[k])
-                    for k in ycontigs.keys()
-                ]
-            metah = [
-                hsId,
-                "@@class heatmap",
-                "@@title %s" % self.args.title + subtitle,
-                "@@datasource %s" % "paf",
-                "@@datafile %s" % self.inFname,
-                "@@refURI %s" % self.args.refURI,
-                "@@xclenfile %s" % xclenfile,
-                "@@yclenfile %s" % yclenfile,
-                "@@axes %s" % ax,
-                "@@rotated %s" % self.rotate,
-            ]
-
-            outs = "\n".join(metah + h) + "\n"
-            outf.write(str.encode(outs))
-
-        fn1 = "%s_cis%s_hseq.gz" % (self.inFname, haps[0])
-        if self.rotate:
-            fn1 = "%s_rotated_cis%s_hseq.gz" % (self.inFname, haps[0])
-        self.cis0n = fn1
-        f1 = gzip.open(fn1, mode="wb")
-        self.cis1f = io.BufferedWriter(f1, buffer_size=1024 * 1024)
-        prepHeader(
-            haps[0],
-            hsId,
-            xcontigs,
-            xcontigs,
-            self.args,
-            self.cis1f,
-            " Pairs on %s" % haps[0],
-            xclenfile=self.args.xclenfile,
-            yclenfile=self.args.xclenfile,
-            ax=haps[0],
-        )
-        fn2 = "%s_cis%s_hseq.gz" % (self.inFname, haps[1])
-        if self.rotate:
-            fn2 = "%s_rotated_cis%s_hseq.gz" % (self.inFname, haps[1])
-        self.cis1n = fn2
-        f2 = gzip.open(fn2, mode="wb")
-        self.cis2f = io.BufferedWriter(f2, buffer_size=1024 * 1024)
-        prepHeader(
-            haps[1],
-            hsId,
-            ycontigs,
-            ycontigs,
-            self.args,
-            self.cis2f,
-            " Pairs on %s" % haps[1],
-            xclenfile=self.args.yclenfile,
-            yclenfile=self.args.yclenfile,
-            ax=haps[1],
-        )
-        fn3 = "%s_trans_hseq.gz" % (self.inFname)
-        self.transn = fn1
-        if self.rotate:
-            fn3 = "%s_rotated_trans_hseq.gz" % (self.inFname)
-        f3 = gzip.open(fn3, mode="wb")
-        self.transf = io.BufferedWriter(f3, buffer_size=1024 * 1024)
-        prepHeader(
-            haps,
-            hsId,
-            xcontigs,
-            ycontigs,
-            self.args,
-            self.transf,
-            " Pairs on different haplotypes",
-            xclenfile=self.args.xclenfile,
-            yclenfile=self.args.yclenfile,
-            ax="BOTH",
-        )

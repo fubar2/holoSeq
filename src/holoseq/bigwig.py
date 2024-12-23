@@ -1,5 +1,5 @@
 # bigwig tracks in holoSeq
-# has functions to read a bigwig and write a hseq.gz, and to prepare a panel showing that hseq.gz 
+# has functions to read a bigwig and write a hseq.gz, and to prepare a panel showing that hseq.gz
 # using the generic data.load function
 
 from bisect import bisect_left
@@ -10,22 +10,21 @@ import os
 from pathlib import Path
 
 
-
 import pybigtools
 import holoviews as hv
 import pandas as pd
 import panel as pn
 
 
-
 from config import VALID_HSEQ_FORMATS
-from holoseq import holoseq_data
+import holoseq_data
 
 
 from holoviews.operation.datashader import (
     dynspread,
 )
-#from holoviews.operation.element import apply_when
+
+# from holoviews.operation.element import apply_when
 from holoviews.operation.resample import ResampleOperation2D
 from holoviews.operation import decimate
 
@@ -42,7 +41,6 @@ ResampleOperation2D.height = 250
 
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger("bigwig")
-
 
 
 logging.basicConfig(level=logging.DEBUG)
@@ -63,7 +61,7 @@ class bigwig:
         self.hsId = VALID_HSEQ_FORMATS[0]
         self.contigs = contigs
 
-    def precompute(self):
+    def convert(self):
         fakepath = "in.bw"
         if os.path.isfile(fakepath):
             os.remove(fakepath)
@@ -92,6 +90,7 @@ class bigwig:
                     "Bigwig contig %s not found in supplied X axis lengths file" % cchr
                 )
         self.export(bwdata)
+        return self.outFname
 
     def export(self, bwdata):
         """
@@ -103,7 +102,10 @@ class bigwig:
             """
             holoSeq output format
             """
-            h = ["@%s %s %d" % (holoseq_data.getHap(k), k, self.contigs[k]) for k in self.contigs.keys()]
+            h = [
+                "@%s %s %d" % (holoseq_data.getHap(k), k, self.contigs[k])
+                for k in self.contigs.keys()
+            ]
             metah = [
                 self.hsId,
                 "@@class bigwig",
@@ -151,7 +153,9 @@ class bigwig:
             )
             return str_pane
 
-        (hsDims, hapsread, xcoords, ycoords, annos, plotType, metadata, gffdata, hh) = holoseq_data.load(inFile)
+        (hsDims, hapsread, xcoords, ycoords, annos, plotType, metadata, gffdata, hh) = (
+            holoseq_data.load(inFile)
+        )
         self.rotated = metadata.get("rotated") == "True"
         title = " ".join(metadata["title"])
         haps = []
@@ -204,4 +208,3 @@ class bigwig:
         p1 = pn.Column(showloc, bigw)
 
         return p1, title
-

@@ -29,15 +29,15 @@ def getHap(contig, hap_indicator="None"):
     whoever assembles your genomes.
      help="None, Suffix (H[1,2]) Dashsuffix (_H...)"
     """
-    if hap_indicator == "None":
+    if hap_indicator.lower() == "none":
         return "H1"
-    elif hap_indicator == "Suffix":
+    elif hap_indicator.lower() == "suffix":
         return contig[-2:]
-    elif hap_indicator == "Dashsuffix":
+    elif hap_indicator.lower() == "dashsuffix":
         return contig.split("_")[-1]
 
 
-def getContigs(lenFile):
+def getContigs(lenFile, hapindicator):
     # samtools faidx will make one of these from a genome fasta
     # whitespace delimited contig names and lengths.
     contigs = []
@@ -53,7 +53,7 @@ def getContigs(lenFile):
                 else:
                     seen[c] = c
                     contigs.append((c, int(clen)))
-                h = getHap(c)
+                h = getHap(c, hapindicator)
                 if h not in haps:
                     haps.append(h)
     return contigs, haps
@@ -296,7 +296,19 @@ def load(path: Path):
             log.debug("extending haps %s" % hh)
             hh.append(hh[0])
         hh.sort()
-        return (num_dimensions, haploids, x_coords, y_coords, annotations, plot_type, metadata, gff_data, hh, rotated)
+        return (
+            num_dimensions,
+            haploids,
+            x_coords,
+            y_coords,
+            annotations,
+            plot_type,
+            metadata,
+            gff_data,
+            hh,
+            rotated,
+        )
+
 
 def getMetadata(path: Path):
     metadata = {}
@@ -316,7 +328,8 @@ def getMetadata(path: Path):
                     metadata[tokens[0]] = tokens[1:]
             else:
                 break
-    return valid, metadata 
+    return valid, metadata
+
 
 if __name__ == "__main__":
     # print first parameter metadata

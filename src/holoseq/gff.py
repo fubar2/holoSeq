@@ -1,5 +1,5 @@
 # class for gff tracks in holoSeq
-# has functions to read a gff and write a hseq.gz, and to prepare a panel showing that hseq.gz 
+# has functions to read a gff and write a hseq.gz, and to prepare a panel showing that hseq.gz
 # using the generic data.load function
 
 from bisect import bisect_left
@@ -12,7 +12,7 @@ import os
 import urllib.request
 
 from config import VALID_HSEQ_FORMATS
-from holoseq import holoseq_data
+import holoseq_data
 
 import holoviews as hv
 from holoviews.operation.datashader import (
@@ -43,8 +43,8 @@ class gff:
         self.outFname = outFname
         self.args = args
         log.debug("contigs=%s" % str(self.contigs)[:1000])
-    
-    def precompute(self):
+
+    def convert(self):
         with open(self.inFname) as g:
             for i, row in enumerate(g):
                 if not row.startswith(self.comment):
@@ -107,7 +107,8 @@ class gff:
                                     "cds",
                                 )
                             )
-        self.export( )
+        self.export()
+        return self.outFname
 
     def export(self):
         """
@@ -122,7 +123,10 @@ class gff:
             """
             holoSeq output format
             """
-            h = ["@%s %s %d" % (holoseq_data.getHap(k), k, self.contigs[k]) for k in self.contigs.keys()]
+            h = [
+                "@%s %s %d" % (holoseq_data.getHap(k), k, self.contigs[k])
+                for k in self.contigs.keys()
+            ]
             metah = [
                 self.hsId,
                 "@@class GFF",
@@ -196,7 +200,7 @@ class gff:
 
         def get_ncbi(target):
 
-            xpuri = 'https://www.ncbi.nlm.nih.gov/gene/?term=%s' % target
+            xpuri = "https://www.ncbi.nlm.nih.gov/gene/?term=%s" % target
             req = urllib.request.Request(xpuri)
             with urllib.request.urlopen(req) as response:
                 apage = response.read()
@@ -205,7 +209,6 @@ class gff:
             iframe_html = f'<iframe srcdoc="{escaped_html}" style="height:100%; width:100%" frameborder="0"></iframe>'
             # Display iframe in a Panel HTML pane
             pn.pane.HTML(iframe_html, height=350, sizing_mode="stretch_width")
-
 
         def showX(x, y):
             if np.isnan(x):
@@ -345,5 +348,3 @@ cds XP_026248570.1 531341254 531341334 100 100 + 134
         p = pn.Column(showloc, gp)
 
         return p, title
-
-

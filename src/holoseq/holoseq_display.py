@@ -1,5 +1,5 @@
 # see https://github.com/fubar2/holoSeq
-# generic pre-computed holoseq.gz display 
+# generic pre-computed holoseq.gz display
 # any number of input files. Metadata is read to
 # discover the display class to call to make a stacked panel from
 # each one.
@@ -30,9 +30,6 @@ def xportHtml(fname, hObj):
     hv.save(filename=fname, obj=hObj)
 
 
-
-
-
 parser = argparse.ArgumentParser(description="", epilog="")
 parser.add_argument(
     "--inFile",
@@ -59,7 +56,10 @@ for i, infile in enumerate(args.inFile):
         elif cls == "pair2d":
             p1, title = pair2d.makePafPanel(infile, pwidth)
         else:
-            logging.warn("infile %s metadata has unknown holoseq.gz class %s so cannot display- expect pair2, bigwig or gff" % (infile, cls))
+            logging.warn(
+                "infile %s metadata has unknown holoseq.gz class %s so cannot display- expect pair2, bigwig or gff"
+                % (infile, cls)
+            )
     if outp is None:
         outp = p1
     else:

@@ -28,29 +28,14 @@
 
 import argparse
 
-from collections import OrderedDict
-from functools import cmp_to_key
-from pathlib import Path
-
-import gzip
-import io
-import itertools
 import logging
-import math
 
-
-import re
-import os
 
 import holoseq_data
 import gff
 import bigwig
 import pair2d
 
-import pybigtools
-
-i
-from rotater import rotater
 
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger("holoseq_prepare")
@@ -68,8 +53,8 @@ if __name__ == "__main__":
        required=True,
     )
     parser.add_argument(
-        "--intype",
-        help="pair2d, bigwig or gff3 are currently supported",
+        "--inFtype",
+        help="Only pair2d, bigwig or gff are currently supported",
        required=True,
     )
     parser.add_argument(
@@ -86,7 +71,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--yclenfile",
         help="Optional Y axis contig names and lengths, whitespace delimited for different reference sequences",
-        required=False,
+        required=True,
     )
     
     parser.add_argument(
@@ -115,11 +100,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     haps = []
     yhaps = []
-    xcontigs, xhaps = getContigs(args.xclenfile)
-    sxcontigs, xwidth = contsort(xcontigs, args)
+    xcontigs, xhaps = holoseq_data.getContigs(args.xclenfile, args.hap_indicator)
+    sxcontigs, xwidth = holoseq_data.contsort(xcontigs, args)
     if args.yclenfile:
-        ycontigs, yhaps = getContigs(args.yclenfile)
-        sycontigs, ywidth = contsort(ycontigs, args)
+        ycontigs, yhaps = holoseq_data.getContigs(args.yclenfile, args.hap_indicator)
+        sycontigs, ywidth = holoseq_data.contsort(ycontigs, args)
     else:
         sycontigs = sxcontigs
         ywidth = xwidth
@@ -129,18 +114,21 @@ if __name__ == "__main__":
     if len(haps) == 1:
         log.debug("extending haps %s" % haps)
         haps.append(haps[0])
-    haps.sort()
-    ps = args.inftype
-    log.debug("inFile=%s, ftype = %s" % (f, ps))
+    log.debug('***haps %s' % haps)
+    ps = args.inFtype
+    log.debug("inFile=%s, ftype = %s" % (args.inFile, ps))
 
     if ps == "pair2d":
-        p = pair2d.pafConvert(f, args, sxcontigs, sycontigs, haps, xwidth, ywidth)
+        p = pair2d.pair2d(args.inFile, args, sxcontigs, sycontigs, haps, xwidth, ywidth)
+        outs = p.convert()
     elif ps in [".bw", ".bigwig"]:
-        outf = "%s.hseq.gz" % f
-        p = bwConvert(f, outf, args, sxcontigs)
+        outf = "%s.hseq.gz" % args.inFile
+        p = bigwig(args.inFile, outf, args, sxcontigs)
+        p.convert()
     elif ps in [".gff3", ".gff"]:
-        outf = "%s.hseq.gz" % f
-        p = gffConvert(f, outf, sxcontigs, args)
+        outf = "%s.hseq.gz" % args.inFile
+        p = gff(args.inFile, outf, sxcontigs, args)
+        p.convert()
     else:
         log.warn("%s unknown type - cannot process" % ps)
     logging.shutdown()
