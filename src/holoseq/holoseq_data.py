@@ -13,15 +13,15 @@ import logging
 import re
 import sys
 
-from config import VALID_HSEQ_FORMATS
-from exceptions import HoloSeqFormatError
+from holoseq.config import VALID_HSEQ_FORMATS
+from holoseq.exceptions import HoloSeqFormatError
 
 
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger("holoseq_prepare")
 
 
-def getHap(contig, hap_indicator="Suffix"):
+def getHap(contig, hap_indicator="suffix"):
     """
     vgp has 2 haplotypes and these need to be distinguished in tracks, so often have a suffix like "H1"
 
@@ -102,10 +102,11 @@ def VGPsortfunc(s1, s2):
                 if found:
                     c1, n1 = found.groups()[:2]
                     n2 = None
-        if n1.isdigit():
-            n1 = int(n1)
-        else:
-            n1 = ord(n1[0])
+        if n1:
+            if n1.isdigit():
+                n1 = int(n1)
+            else:
+                n1 = ord(n1[0])
         if n2:
             if n2.isdigit():
                 n2 = int(n2)

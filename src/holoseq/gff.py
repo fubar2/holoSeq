@@ -1,6 +1,6 @@
 # class for gff tracks in holoSeq
-# has functions to read a gff and write a hseq.gz, and to prepare a panel showing that hseq.gz
-# using the generic data.load function
+#exposes a convert funcion to read a gff and prepare metadata and coordinates for holoseq.gz
+#and a makePanel function to return  a panel gff track from that hseq.gz using the generic data.load function
 
 from bisect import bisect_left
 import gzip
@@ -11,8 +11,8 @@ import os
 
 import urllib.request
 
-from config import VALID_HSEQ_FORMATS
-import holoseq_data
+from holoseq.config import VALID_HSEQ_FORMATS
+from holoseq import holoseq_data
 
 import holoviews as hv
 from holoviews.operation.datashader import (
@@ -23,12 +23,12 @@ from holoviews.operation.element import apply_when
 import panel as pn
 
 logging.basicConfig(level=logging.DEBUG)
-log = logging.getLogger("holoseq_prepare")
+log = logging.getLogger("gff")
 
 
 class gff:
     """
-            Only care about mRNA cds and stop codons initally. Turn into segments. Filter so only data in contigs is retained from input.
+    don't need any gff high level relationship - just mRNA cds and stop codons. Turn into segments. Filter so only data in contigs is retained from input.
     SUPER_1 miniprot        mRNA    139006290       139072696       22660   -       .       ID=MP000006;Rank=1;Identity=0.9979;Positive=0.9984;Target=XP_026244093.1 1 4350
         fix positions as we go with a lookup contig -> cumulated offset
         can pop open https://www.ncbi.nlm.nih.gov/protein/XP_026244093.1
@@ -42,6 +42,7 @@ class gff:
         self.inFname = gff
         self.outFname = outFname
         self.args = args
+        self.contigs=contigs
         log.debug("contigs=%s" % str(self.contigs)[:1000])
 
     def convert(self):
@@ -95,7 +96,17 @@ class gff:
                             else:
                                 log.warn("no target found in %s at row %d" % (text, i))
                         elif kind.lower() == "stop_codon":
-                            self.segs[id].append((startp + offset, target, "stopc"))
+                            self.segs[id].append(
+                                (
+                                    startp + offset,
+                                    endp + offset,
+                                    strand,
+                                    score,
+                                    target,
+                                    "stop_codon",
+                                )
+                            )
+                            self.segs[id].append()
                         elif kind.lower() == "cds":
                             self.segs[id].append(
                                 (
@@ -113,10 +124,10 @@ class gff:
     def export(self):
         """
         for GFF
-        @v1HoloSeq2D for example
         A default  Y value of 100 is set for each mRNA's extent, but often there are dozens of different named sequences in the databases that will overlap.
         Assuming the GFF is sorted, overlapping mRNA is identified as ending or starting in the previous extent and the y value is decremented to avoid overlap
         Y is reset if no overlap
+        probably more efficient to jitter at display?
         """
 
         def prepHeader():
@@ -129,9 +140,9 @@ class gff:
             ]
             metah = [
                 self.hsId,
-                "@@class GFF",
+                "@@class gff",
                 "@@title %s" % self.args.title,
-                "@@datasource GFF",
+                "@@datasource gff",
                 "@@datafile %s" % self.inFname,
                 "@@refURI %s" % self.args.refURI,
                 "@@xclenfile %s" % self.args.xclenfile,
@@ -291,6 +302,18 @@ cds XP_026248570.1 531341254 531341334 100 100 + 134
                 segs["colour"].append(colr)
                 segs["thickness"].append(cdthick)
                 segs["alpha"].append(1.0)
+            elif (
+                rows[0].lower() == "stop_codon"
+            ):
+                segs["target"].append(targ)
+                segs[xcf].append(startp)
+                segs["x2"].append(startp+3)
+                segs["wy1"].append(y)
+                segs["y2"].append(y)
+                segs["colour"].append("red")
+                segs["thickness"].append(20)
+                segs["alpha"].append(1.0)
+
         title = " ".join(metadata["title"])
         haps = []
         print("GFF rows read =", len(gffdata))

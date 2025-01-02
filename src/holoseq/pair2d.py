@@ -19,11 +19,11 @@ import pandas as pd
 import panel as pn
 
 
-from config import VALID_HSEQ_FORMATS
+from holoseq.config import VALID_HSEQ_FORMATS
 
-import holoseq_data
+from holoseq import holoseq_data
 
-from rotater import rotater
+from holoseq.rotater import rotater
 
 
 from holoviews.operation.datashader import (

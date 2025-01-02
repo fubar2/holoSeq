@@ -16,8 +16,8 @@ import pandas as pd
 import panel as pn
 
 
-from config import VALID_HSEQ_FORMATS
-import holoseq_data
+from holoseq.config import VALID_HSEQ_FORMATS
+from holoseq import holoseq_data
 
 
 from holoviews.operation.datashader import (
@@ -43,10 +43,6 @@ logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger("bigwig")
 
 
-logging.basicConfig(level=logging.DEBUG)
-log = logging.getLogger("holoseq_prepare")
-
-
 class bigwig:
     """
     points = [(50*i, 100+random.random()) for i in range(10000)]
@@ -70,12 +66,13 @@ class bigwig:
         bwf = pybigtools.open(fakepath)
         bchrlist = bwf.chroms()
         bwchrs = list(bchrlist.keys())
+        log.debug('bwchrs=%s' % bwchrs)
         bwdata = {}
         for i, bchr in enumerate(bwchrs):
             cchr = bchr
             if (not self.contigs.get(bchr, None)) and self.args.addH1:
                 cchr = cchr + "H1"
-            if self.contigs.get(cchr, None):
+            if self.contigs.get(cchr, None) is not None:
                 cstart = self.contigs[cchr]
                 bwdata[cchr] = {}
                 bw = bwf.records(bchr)
@@ -95,7 +92,7 @@ class bigwig:
     def export(self, bwdata):
         """
         for bigwig
-        @v1HoloSeq2D for example
+        @v1HoloSeq1D for example
         """
 
         def prepHeader():

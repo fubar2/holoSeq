@@ -31,10 +31,10 @@ import argparse
 import logging
 
 
-import holoseq_data
-import gff
-import bigwig
-import pair2d
+from holoseq import holoseq_data
+from holoseq import gff
+from holoseq import bigwig
+from holoseq import pair2d
 
 
 logging.basicConfig(level=logging.DEBUG)
@@ -70,8 +70,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--yclenfile",
-        help="Optional Y axis contig names and lengths, whitespace delimited for different reference sequences",
-        required=True,
+        help="Optional Y axis contig names and lengths, whitespace delimited for different reference sequences. Required for 2D plots",
+        required=False,
     )
     
     parser.add_argument(
@@ -121,13 +121,14 @@ if __name__ == "__main__":
     if ps == "pair2d":
         p = pair2d.pair2d(args.inFile, args, sxcontigs, sycontigs, haps, xwidth, ywidth)
         outs = p.convert()
-    elif ps in [".bw", ".bigwig"]:
+    elif ps in ["bw", "bigwig"]:
         outf = "%s.hseq.gz" % args.inFile
-        p = bigwig(args.inFile, outf, args, sxcontigs)
+        p = bigwig.bigwig(args.inFile, outf, args, sxcontigs)
         p.convert()
-    elif ps in [".gff3", ".gff"]:
+    elif ps in ["gff3", "gff"]:
         outf = "%s.hseq.gz" % args.inFile
-        p = gff(args.inFile, outf, sxcontigs, args)
+        p = gff.gff(args.inFile, outf, sxcontigs, args)
+        log.debug("contigs=%s" % contigs)
         p.convert()
     else:
         log.warn("%s unknown type - cannot process" % ps)
