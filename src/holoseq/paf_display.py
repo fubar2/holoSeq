@@ -50,7 +50,7 @@ parser.add_argument(
 parser.add_argument(
     "--hap_indicator",
     help="None, Suffix (H[1,2]) Dashsuffix (_H...)",
-    default="None",
+    default="Suffix",
 )
 parser.add_argument(
     "--rotate",

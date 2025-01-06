@@ -6,15 +6,15 @@
 from bisect import bisect_left
 from collections import OrderedDict
 import gzip
-import io
 import logging
-import numpy as np
+
 import os
 
 import sys
 
 
 import holoviews as hv
+import numpy as np
 import pandas as pd
 import panel as pn
 
@@ -69,32 +69,46 @@ class pair2d:
     python holoSeq_prepare_gz.py --inFile mUroPar1H1H2.paf --xclenfile mUroPar1H1suffix.len --yclenfile mUroPar1H2suffix.len --contig_sort VGPname --hap_indicator Suffix
     """
 
-    def __init__(self, inFname, args, xcontigs, ycontigs, haps, xwidth, ywidth):
+    def __init__(self):
         """
-        if rotating, prepare a rotater
+        
         """
-        self.inFname = inFname
+        self.Hsid = VALID_HSEQ_FORMATS[1]
+
+    def convert(self,args):
+
+        haps = []
+        yhaps = []
+        xcontigs, xhaps = holoseq_data.getContigs(args.xclenfile, args.hap_indicator)
+        sxcontigs, xwidth = holoseq_data.contsort(xcontigs, args)
+        if args.yclenfile:
+            ycontigs, yhaps = holoseq_data.getContigs(args.yclenfile, args.hap_indicator)
+            sycontigs, ywidth = holoseq_data.contsort(ycontigs, args)
+        else:
+            sycontigs = sxcontigs
+            ywidth = xwidth
+        for h in xhaps + yhaps:
+            if h not in haps:
+                haps.append(h)
+        if len(haps) == 1:
+            log.debug("extending haps %s" % haps)
+            haps.append(haps[0])
+        log.debug('***haps %s' % haps)
+        ps = args.inFtype.lower()
+        log.debug("inFile=%s, ftype = %s" % (args.inFile, ps))
         self.args = args
-        self.rot = rotater(xwidth, ywidth)
-        self.rotate = args.rotate
-        self.rot.onepointRot = True
-        self.rot.origin = (0, ywidth)
-        self.outFprefix = inFname
+        self.haps = haps
         self.xcontigs = xcontigs
         self.ycontigs = ycontigs
-        self.haps = haps
-        # have the axes set up so prepare the three plot x/y vectors
-        self.hsId = VALID_HSEQ_FORMATS[1]
-        self.inFname = inFname
-        self.hap_indicator=args.hap_indicator
-
-    def convert(self):
+        self.infname = args.inFname
+        self.yclenfile = args.yclenfile
+        self.xclenfile = args.xclenfile
         self.prepPafGZ()
         if self.isGzip(self.inFname):
-            with gzip.open(self.inFname, "rt") as f:
+            with gzip.open(self.infname, "rt") as f:
                 self.readPAF(f)
         else:
-            with open(self.inFname) as f:
+            with open(self.infname) as f:
                 self.readPAF(f)
         self.cis1fio.close()
         self.cis2fio.close()
@@ -113,8 +127,8 @@ class pair2d:
                 c2 = row[5]
                 n1 = int(row[2])
                 n2 = int(row[7])
-                H1 = holoseq_data.getHap(c1, hap_indicator= self.hap_indicator)
-                H2 = holoseq_data.getHap(c2, hap_indicator= self.hap_indicator)
+                H1 = holoseq_data.getHap(c1, hap_indicator= self.args.hap_indicator)
+                H2 = holoseq_data.getHap(c2, hap_indicator= self.args.hap_indicator)
                 if H1 != H2:  # trans
                     if H1 == self.haps[0]:  # x is h1 for trans - otherwise ignore
                         x = self.xcontigs[c1] + n1
@@ -215,13 +229,13 @@ class pair2d:
                 ]
             metah = [
                 hsId,
-                "@@class heatmap",
+                "@@class pair2d",
                 "@@title %s" % self.args.title + subtitle,
                 "@@datasource %s" % "paf",
-                "@@datafile %s" % self.inFname,
+                "@@datafile %s" % self.infname,
                 "@@refURI %s" % self.args.refURI,
-                "@@xclenfile %s" % xclenfile,
-                "@@yclenfile %s" % yclenfile,
+                "@@xclenfile %s" % self.xclenfile,
+                "@@yclenfile %s" % self.yclenfile,
                 "@@axes %s" % ax,
                 "@@rotated %s" % self.rotate,
             ]
@@ -282,7 +296,7 @@ class pair2d:
         )
 
 
-    def makePanel(self, inFile, pwidth):
+    def makePanel(self,infname, pwidth=1000):
         """
         prepare a complete panel for the final display
         """
@@ -352,31 +366,33 @@ class pair2d:
                 width=pwidth,
             )
             return str_pane
-
-        (hsDims, hapsread, xcoords, ycoords, annos, plotType, metadata, gffdata, hh) = (
-            holoseq_data.load(inFile)
-        )
-        self.rotated = metadata.get(
-            "rotated",
-            [
-                False,
-            ],
-        )[0]
+        self.pwidth = pwidth
+        (num_dimensions,
+            haploids,
+            x_coords,
+            y_coords,
+            annotations,
+            plot_type,
+            metadata,
+            gff_data,
+            hh,
+            rotated) = holoseq_data.load(infname)
+        self.rotated = rotated
         print("rotated", self.rotated)
-        rot = rotater(max(xcoords), max(ycoords))
+        rot = rotater(max(x_coords), max(y_coords))
         title = " ".join(metadata["title"])
         hqstarts = OrderedDict()
         haps = []
-        print("Read nx=", len(xcoords), "ny=", len(ycoords))
+        print("Read nx=", len(x_coords), "ny=", len(y_coords))
         h1starts = []
         h1names = []
         h2starts = []
         h2names = []
-        for i, hap in enumerate(hapsread.keys()):
+
+        for i, hap in enumerate(haploids.values()):
             haps.append(hap)
             hqstarts[hap] = OrderedDict()
-            for j, contig in enumerate(hapsread[hap]["cn"]):
-                cstart = hapsread[hap]["startpos"][j]
+            for j, contig,cstart in enumerate(haploids[hap]['contigs']):
                 hqstarts[hap][contig] = cstart
                 if i == 0:
                     h1starts.append(cstart)
@@ -402,7 +418,7 @@ class pair2d:
         xcf = os.path.splitext(metadata["xclenfile"][0])[0]
         ycf = "Y:" + os.path.splitext(metadata["yclenfile"][0])[0]
         print("xcf", xcf, "ycf", ycf)
-        pafxy = pd.DataFrame.from_dict({xcf: xcoords, ycf: ycoords})
+        pafxy = pd.DataFrame.from_dict({xcf: x_coords, ycf: y_coords})
         pafp = hv.Points(pafxy, kdims=[xcf, ycf])
 
         # apply_when(pafp, operation=rasterize, predicate=lambda x: len(x) > 5000)

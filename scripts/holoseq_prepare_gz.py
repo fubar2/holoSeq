@@ -26,6 +26,24 @@
 
 # Ross Lazarus October 2024
 
+"""oh dear
+@v1HoloSeq2D
+@@class pair2d
+@@title VGP mUroPar1 HiC data Pairs on H1
+@@datasource paf
+@@datafile ./tests/mUroPar1H1H2.paf.gz
+@@refURI Unknown
+@@xclenfile ./tests/mUroPar1H1H2.len
+@@yclenfile ./tests/mUroPar1H1H2.len
+@@axes H1
+@@rotated False
+@H1 SUPER_1H1 0
+@H2 SUPER_1H2 284260672
+@H1 SUPER_2H1 568308509
+@H2 SUPER_2H2 794977238
+
+not th h2 super1 should also start wih offset 0
+"""
 import argparse
 
 import logging
@@ -119,8 +137,8 @@ if __name__ == "__main__":
     log.debug("inFile=%s, ftype = %s" % (args.inFile, ps))
 
     if ps == "pair2d":
-        p = pair2d.pair2d(args.inFile, args, sxcontigs, sycontigs, haps, xwidth, ywidth)
-        outs = p.convert()
+        p = pair2d.pair2d()
+        outs = p.convert(args)
     elif ps in ["bw", "bigwig"]:
         outf = "%s.hseq.gz" % args.inFile
         p = bigwig.bigwig(args.inFile, outf, args, sxcontigs)

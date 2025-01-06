@@ -84,16 +84,17 @@ parser.add_argument("--size", help="Display size in pixels. Default is 1000", de
 parser.add_argument("--version", "-V", action="version", version="0.1")
 args = parser.parse_args()
 pwidth = int(args.size)
+
 for i, infile in enumerate(args.inFile):
     print("Infile = ", infile)
-    metdat = holoseq_data.getMetadata(infile)
+    valid, metdat = holoseq_data.getMetadata(infile)
     cls = metdat['class'][0]
     if cls == 'pair2d':
-        p = holoseq.pair2d.pair2d
-        p.load(infile)
-        p1, t1 = p.makePanel()
+        p = pair2d.pair2d()
+        p1, t1 = p.makePanel(infile,pwidth)
     if i == 0:
         outp = p1
     else:
         outp = outp + p1
-pn.Row(outp).servable(title=title)
+pn.Row(outp).servable(title=t1)
+

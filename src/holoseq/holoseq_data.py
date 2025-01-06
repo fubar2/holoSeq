@@ -158,6 +158,7 @@ def Lengthsortfunc(s1, s2):
 
 def contsort(contigs, args):
     # sort and return offsets to starts of each contig
+    #this is name, length from the len file in sort order
     # hstarts = list(itertools.accumulate(hlens))
     if args.contig_sort.lower() == "vgpname":
         contigs.sort(key=cmp_to_key(VGPsortfunc))
@@ -172,7 +173,6 @@ def contsort(contigs, args):
     scont = OrderedDict(zip(cnames, cstarts))
     maxpos = cstarts[-1] + clens[-1]
     return scont, maxpos
-
 
 def is_valid_header(header: str) -> tuple[bool, int, str]:
     tokens = [token.strip() for token in header.split()]
@@ -193,7 +193,7 @@ def is_valid_header(header: str) -> tuple[bool, int, str]:
     return check, num_dimensions, plot_type
 
 
-def load(path: Path):
+def load(infile):
     haploids = {}
     x_coords = array.array("l")
     y_coords = array.array("l")
@@ -207,7 +207,7 @@ def load(path: Path):
     num_dimensions = -1
     plot_type = "bar"
 
-    with gzip.open(path, "rt") as f:
+    with gzip.open(infile, "rt") as f:
         for i, line in enumerate(f):
             # Check if we have a valid holoSeq file using the first line as a header, and raise an
             # error if it is not.
@@ -230,17 +230,17 @@ def load(path: Path):
                     tokens = [token.strip() for token in row.split()]
 
                     if len(tokens) >= 3:
-                        haploid_name, contig_name, position = tokens[:3]
+                        haploid_name, contig_name, start = tokens[:3]
                         if not haploids.get(haploid_name, None):
                             haploids[haploid_name] = {
                                 "contig_names": [],
-                                "positions": array.array("l"),
+                                "starts": array.array("l"),
                             }
                             hh.append(haploid_name)
 
                         if num_dimensions == 2:
                             haploids[haploid_name]["contig_names"].append(contig_name)
-                            haploids[haploid_name]["positions"].append(int(position))
+                            haploids[haploid_name]["starts"].append(int(start))
                     else:
                         msg = (
                             "NOT A VALID holoSeq FILE.\n"
