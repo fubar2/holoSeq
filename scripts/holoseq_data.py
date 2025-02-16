@@ -18,8 +18,11 @@ import bigwig
 import pair2d
 
 
+import logging
+
 logging.basicConfig(level=logging.DEBUG)
-log = logging.getLogger("holoseq_display")
+log = logging.getLogger(__name__)
+
 
 # inFile = "galaxy_inputs/paf/bothmap.paf.tab.tabular"
 inFile = "/home/ross/rossgit/holoviews-examples/holoSeqtest.gz"

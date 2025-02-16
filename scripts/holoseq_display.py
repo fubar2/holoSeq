@@ -33,10 +33,6 @@ from holoseq import gff
 from holoseq import bigwig
 from holoseq import pair2d
 
-
-logging.basicConfig(level=logging.DEBUG)
-log = logging.getLogger("holoseq_prepare")
-
 import holoviews as hv
 import numpy as np
 import pandas as pd
@@ -45,8 +41,7 @@ from holoviews.operation import decimate
 from holoviews.operation.datashader import dynspread, rasterize
 from holoviews.operation.element import apply_when
 from holoviews.operation.resample import ResampleOperation2D
-
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.debug)
 log = logging.getLogger("holoseq_display")
 hv.extension("bokeh", "matplotlib", width=100)
 

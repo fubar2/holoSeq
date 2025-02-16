@@ -5,6 +5,7 @@
 
 from bisect import bisect_left
 from collections import OrderedDict
+import copy
 import gzip
 import logging
 
@@ -35,6 +36,9 @@ from holoviews.operation.datashader import (
 from holoviews.operation.resample import ResampleOperation2D
 from holoviews.operation import decimate
 
+logging.basicConfig(level=logging.DEBUG)
+log = logging.getLogger(__name__)
+
 
 hv.extension("bokeh", "matplotlib", width=100)
 
@@ -46,11 +50,8 @@ ResampleOperation2D.width = 250
 ResampleOperation2D.height = 250
 
 
-logging.basicConfig(level=logging.DEBUG)
-log = logging.getLogger("pair2d")
-
-
 class pair2d:
+
     """
     updated to stream row at a time -
     slower but no room for the entire output if the input is 60GB+
@@ -79,15 +80,17 @@ class pair2d:
 
         haps = []
         yhaps = []
-        xcontigs, xhaps = holoseq_data.getContigs(args.xclenfile, args.hap_indicator)
-        sxcontigs, xwidth = holoseq_data.contsort(xcontigs, args)
+        xcontigs, xhaps = holoseq_data.getContigs(args.xclenfile, args.hap_indicator, 'H1')
+        sxcontigs = holoseq_data.contsort(xcontigs, args)
         if args.yclenfile:
-            ycontigs, yhaps = holoseq_data.getContigs(args.yclenfile, args.hap_indicator)
-            sycontigs, ywidth = holoseq_data.contsort(ycontigs, args)
+            ycontigs, yhaps = holoseq_data.getContigs(args.yclenfile, args.hap_indicator, 'H2')
+            sycontigs = holoseq_data.contsort(ycontigs, args)
         else:
             sycontigs = sxcontigs
-            ywidth = xwidth
-        for h in xhaps + yhaps:
+        for h in xhaps:
+            if h not in haps:
+                haps.append(h)
+        for h in yhaps:
             if h not in haps:
                 haps.append(h)
         if len(haps) == 1:
@@ -95,20 +98,21 @@ class pair2d:
             haps.append(haps[0])
         log.debug('***haps %s' % haps)
         ps = args.inFtype.lower()
-        log.debug("inFile=%s, ftype = %s" % (args.inFile, ps))
+        log.debug("inFile=%s, ftype = %s" % (self.inFname, ps))
+        print("sycontigs###",list(sycontigs.keys())[:30], list(sycontigs.values())[:30], )
         self.args = args
         self.haps = haps
-        self.xcontigs = xcontigs
-        self.ycontigs = ycontigs
-        self.infname = args.inFname
+        self.xcontigs = sxcontigs
+        self.ycontigs = sycontigs
+        self.infname = self.inFname
         self.yclenfile = args.yclenfile
         self.xclenfile = args.xclenfile
         self.prepPafGZ()
         if self.isGzip(self.inFname):
-            with gzip.open(self.infname, "rt") as f:
+            with gzip.open(self.inFname, "rt") as f:
                 self.readPAF(f)
         else:
-            with open(self.infname) as f:
+            with open(self.inFname) as f:
                 self.readPAF(f)
         self.cis1fio.close()
         self.cis2fio.close()
@@ -133,7 +137,7 @@ class pair2d:
                     if H1 == self.haps[0]:  # x is h1 for trans - otherwise ignore
                         x = self.xcontigs[c1] + n1
                         y = self.ycontigs[c2] + n2
-                        if self.rotate:
+                        if self.args.rotate:
                             if y <= x:  # lower triangle
                                 x, y = self.rot.rotatecoords(x, y, True)
                             else:
@@ -145,7 +149,7 @@ class pair2d:
                     else:
                         x = self.xcontigs[c2] + n2
                         y = self.ycontigs[c1] + n1
-                        if self.rotate:
+                        if self.args.rotate:
                             if y <= x:  # lower triangle
                                 x, y = self.rot.rotatecoords(xin=x, yin=y, adjust=True)
                             else:
@@ -154,11 +158,11 @@ class pair2d:
                             row ="%d %d\n" % (x, y)
                             self.transfio.write(row)
                             self.nrtrans += 1
-                else:  # cis
+                else:  # cis.
                     if H1 == self.haps[0]:
                         x = self.xcontigs[c1] + n1
                         y = self.xcontigs[c2] + n2
-                        if self.rotate:
+                        if self.args.rotate:
                             if y <= x:  # lower triangle
                                 x, y = self.rot.rotatecoords(xin=x, yin=y, adjust=True)
                             else:
@@ -170,7 +174,7 @@ class pair2d:
                     else:
                         x = self.ycontigs[c1] + n1
                         y = self.ycontigs[c2] + n2
-                        if self.rotate:
+                        if self.args.rotate:
                             if y <= x:  # lower triangle
                                 x, y = self.rot.rotatecoords(xin=x, yin=y, adjust=True)
                             else:
@@ -200,7 +204,6 @@ class pair2d:
 
         def prepHeader(
             haps,
-            hsId,
             xcontigs,
             ycontigs,
             args,
@@ -219,16 +222,15 @@ class pair2d:
             prepare the three potentially needed gzip output channels
             """
             h = [
-                "@%s %s %d" % (holoseq_data.getHap(k, hap_indicator= self.hap_indicator), k, xcontigs[k])
-                for k in xcontigs.keys()
+                "@%s %s %d" % (holoseq_data.getHap(k, hap_indicator= self.args.hap_indicator), k, xcontigs[k])
+                for k in xcontigs
             ]
             if len(haps) > 1:
                 h += [
-                    "@%s %s %d" % (holoseq_data.getHap(k, hap_indicator= self.hap_indicator), k, ycontigs[k])
+                    "@%s %s %d" % (holoseq_data.getHap(k, hap_indicator= self.args.hap_indicator), k, ycontigs[k])
                     for k in ycontigs.keys()
                 ]
-            metah = [
-                hsId,
+            metah = [self.Hsid,
                 "@@class pair2d",
                 "@@title %s" % self.args.title + subtitle,
                 "@@datasource %s" % "paf",
@@ -237,20 +239,22 @@ class pair2d:
                 "@@xclenfile %s" % self.xclenfile,
                 "@@yclenfile %s" % self.yclenfile,
                 "@@axes %s" % ax,
-                "@@rotated %s" % self.rotate,
+                "@@rotated %s" % self.args.rotate,
             ]
             menc = metah + h
             outs = '\n'.join(menc)
             outf.write(outs)
 
-        fn1 = "%s_cis%s_hseq.gz" % (self.inFname, self.haps[0])
-        if self.rotate:
-            fn1 = "%s_rotated_cis%s_hseq.gz" % (self.inFname, self.haps[0])
+        if self.args.cis1outpath:
+            fn1 = self.args.cis1outpath
+        else:
+            fn1 = "%s_cis%s_hseq.gz" % (self.inFname, self.haps[0])
+            if self.args.rotate:
+                fn1 = "%s_rotated_cis%s_hseq.gz" % (self.inFname, self.haps[0])
         self.cis0n = fn1
         self.cis1fio = gzip.open(fn1, mode="wt")
         prepHeader(
             self.haps[0],
-            self.hsId,
             self.xcontigs,
             self.xcontigs,
             self.args,
@@ -260,14 +264,17 @@ class pair2d:
             yclenfile=self.args.xclenfile,
             ax=self.haps[0],
         )
-        fn2 = "%s_cis%s_hseq.gz" % (self.inFname, self.haps[1])
-        if self.rotate:
-            fn2 = "%s_rotated_cis%s_hseq.gz" % (self.inFname, self.haps[1])
+        
+        if self.args.cis2outpath:
+            fn2 = self.args.cis2outpath
+        else:
+            fn2 = "%s_cis%s_hseq.gz" % (self.inFname, self.haps[1])
+            if  self.args.rotate:
+                fn2 = "%s_rotated_cis%s_hseq.gz" % (self.inFname, self.haps[1])
         self.cis2fio = gzip.open(fn2, mode="wt")
         self.cis1n = fn2
         prepHeader(
             self.haps[1],
-            self.hsId,
             self.ycontigs,
             self.ycontigs,
             self.args,
@@ -277,14 +284,17 @@ class pair2d:
             yclenfile=self.args.yclenfile,
             ax=self.haps[1],
         )
-        fn3 = "%s_trans_hseq.gz" % (self.inFname)
-        self.trans1n = fn3
-        if self.rotate:
-            fn3 = "%s_rotated_trans_hseq.gz" % (self.inFname)
+        if self.args.transoutpath:
+            fn3 = self.args.transoutpath
+        else:
+            fn3 = "%s_trans_hseq.gz" % (self.inFname)
+            if self.args.rotate:
+                fn3 = "%s_rotated_trans_hseq.gz" % (self.inFname)
         self.transfio = gzip.open(fn3, mode="wt")
+        self.trans1n = fn3
+        
         prepHeader(
             self.haps,
-            self.hsId,
             self.xcontigs,
             self.ycontigs,
             self.args,
@@ -366,6 +376,8 @@ class pair2d:
                 width=pwidth,
             )
             return str_pane
+
+
         self.pwidth = pwidth
         (num_dimensions,
             haploids,
@@ -378,32 +390,32 @@ class pair2d:
             hh,
             rotated) = holoseq_data.load(infname)
         self.rotated = rotated
-        print("rotated", self.rotated)
         rot = rotater(max(x_coords), max(y_coords))
         title = " ".join(metadata["title"])
         hqstarts = OrderedDict()
         haps = []
-        print("Read nx=", len(x_coords), "ny=", len(y_coords))
         h1starts = []
         h1names = []
         h2starts = []
         h2names = []
 
-        for i, hap in enumerate(haploids.values()):
+        for i, hap in enumerate(haploids.keys()):
             haps.append(hap)
-            hqstarts[hap] = OrderedDict()
-            for j, contig,cstart in enumerate(haploids[hap]['contigs']):
-                hqstarts[hap][contig] = cstart
-                if i == 0:
-                    h1starts.append(cstart)
-                    h1names.append(contig)
-                else:
-                    h2starts.append(cstart)
-                    h2names.append(contig)
+            cnames = haploids[hap]["contig_names"]
+            cstarts = haploids[hap]['starts']
+            hqstarts[hap] = OrderedDict(zip(cnames,cstarts))
+            if i == 0: # first haplotype
+                h1starts = copy.copy(cstarts)
+                h1names = copy.copy(cnames)
+            elif i == 1:
+                h2starts = copy.copy(cstarts)
+                h2names = copy.copy(cnames)
+            else:
+                log.debug('i=%d but code only expects 2 max.' % i)
         hap = hh[0]
         if len(h2starts) == 0:
-            h2starts = h1starts
-            h2names = h1names
+            h2starts = copy.copy(h1starts)
+            h2names = copy.copy(h1names)
             log.warn("only one haplotype read for %s" % title)
         qtic1 = [(h1starts[i], h1names[i]) for i in range(len(h1starts))]
         hap = hh[1]
@@ -411,13 +423,13 @@ class pair2d:
             qtic2 = [(0, "")]
         else:
             qtic2 = [(h2starts[i], h2names[i]) for i in range(len(h2starts))]
+        #print('*****qtic2: %s' % qtic2)
         # once the pairs have been read and mapped into a grid, the code
         # below does the plotting.
         # it can be copied, edited to suit your needs and
         # run repeatedly without waiting for the  holoseq_ to be mapped.
         xcf = os.path.splitext(metadata["xclenfile"][0])[0]
         ycf = "Y:" + os.path.splitext(metadata["yclenfile"][0])[0]
-        print("xcf", xcf, "ycf", ycf)
         pafxy = pd.DataFrame.from_dict({xcf: x_coords, ycf: y_coords})
         pafp = hv.Points(pafxy, kdims=[xcf, ycf])
 
@@ -478,16 +490,16 @@ class pair2d:
                     cnorm="log",
                     colorbar=True,
                     shared_axes=False,
-                    width=self.pwidth,
-                    height=self.pwidth,
                     xticks=qtic1,
                     yticks=qtic2,
                     xrotation=45,
-                    fontsize={"xticks": 5, "yticks": 5},
-                    tools=["tap"],
+                    width=pwidth,
+                    height=pwidth,
+                    # fontsize={"xticks": 8, "yticks": 8},
+                    fontscale=1,
                     scalebar=True,
                     scalebar_range="x",
-                    scalebar_location="bottom_left",
+                    scalebar_location="top_left",
                     scalebar_unit=("bp"),
                     show_grid=True,
                 )

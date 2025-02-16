@@ -42,6 +42,9 @@ import numpy as np
 import pandas as pd
 import pybigtools
 
+numba_logger = logging.getLogger('numba')
+numba_logger.setLevel(logging.WARNING)
+
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger("holoseq_prepare")
 inFile = ""

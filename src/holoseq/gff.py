@@ -22,8 +22,9 @@ from holoviews.operation.datashader import (
 from holoviews.operation.element import apply_when
 import panel as pn
 
+
 logging.basicConfig(level=logging.DEBUG)
-log = logging.getLogger("gff")
+log = logging.getLogger(__name__)
 
 
 class gff:

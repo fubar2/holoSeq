@@ -29,6 +29,9 @@ from holoviews.operation.resample import ResampleOperation2D
 from holoviews.operation import decimate
 
 
+logging.basicConfig(level=logging.DEBUG)
+log = logging.getLogger(__name__)
+
 hv.extension("bokeh", "matplotlib", width=100)
 
 # Default values suitable for this notebook
@@ -37,10 +40,6 @@ dynspread.max_px = 8
 dynspread.threshold = 0.75
 ResampleOperation2D.width = 250
 ResampleOperation2D.height = 250
-
-
-logging.basicConfig(level=logging.DEBUG)
-log = logging.getLogger("bigwig")
 
 
 class bigwig:

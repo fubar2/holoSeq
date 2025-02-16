@@ -45,7 +45,7 @@
 not th h2 super1 should also start wih offset 0
 """
 import argparse
-
+import copy
 import logging
 
 
@@ -54,9 +54,8 @@ from holoseq import gff
 from holoseq import bigwig
 from holoseq import pair2d
 
-
 logging.basicConfig(level=logging.DEBUG)
-log = logging.getLogger("holoseq_prepare")
+log = logging.getLogger(__name__)
 
 # inFile = "galaxy_inputs/paf/bothmap.paf.tab.tabular"
 inFile = "/home/ross/rossgit/holoviews-examples/huge.paf"
@@ -77,9 +76,13 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--xclenfile",
-        help="X axis contig names and lengths, whitespace delimited",
-        required=True,
+        help="X axis contig names and lengths, whitespace delimited - samtools faidx can generate these from the genome/haploype fasta",
+        required=True,  )
+    parser.add_argument(
+        "--xaxis haplotype ID , - such as H1",
+        required=False,
     )
+
     parser.add_argument(
         "--addH1",
         help="Bigwig and gff contigs can have H1 added if that matches the supplied xclenfile contig names. Not recommended - best to map against the right fasta",
@@ -88,8 +91,11 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--yclenfile",
-        help="Optional Y axis contig names and lengths, whitespace delimited for different reference sequences. Required for 2D plots",
+        help="Optional Y axis contig names and lengths, whitespace delimited for different reference sequences. Required for 2D plots. samtools faidx can generate these from the genome/haploype fasta",
         required=False,
+    ) 
+    parser.add_argument(
+        "--yaxishapid , - such as H2", help=' only matching contigs will be on this axis',required=False,
     )
     
     parser.add_argument(
@@ -105,7 +111,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--hap_indicator",
-        help="None, Suffix (H[1,2]) Dashsuffix (_H...)",
+        help="None, Suffix (H[1,2]) Dashsuffix (-H...)",
         default="None",
     )  
     parser.add_argument(
@@ -114,19 +120,42 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
     )
+    parser.add_argument(
+        "--gzoutpath",
+        help="Non-PAF inputs only: Path to write the gzipped precomputed plot. Default [inFile]_[inFtype]_hseq.gz",
+        required=False,
+    ) 
+    parser.add_argument(
+        "--cis1outpath",
+        help="PAF inputs only: Path to write the cis hap1 gzipped precomputed plot. Default [inFile]_cis[hap]_hseq.gz",
+        required=False,
+    ) 
+    parser.add_argument(
+        "--cis2outpath",
+        help="PAF inputs only: Path to write the cis hap2 gzipped precomputed plot. Default [inFile]_cis[hap]_hseq.gz",
+        required=False,
+    ) 
+    parser.add_argument(
+        "--transoutpath",
+        help="PAF inputs only: Path to write the trans (both haplotypes) gzipped precomputed plot. Default [inFile]_trans_hseq.gz",
+        required=False,
+    ) 
+
     parser.add_argument("--version", "-V", action="version", version="0.1")
     args = parser.parse_args()
     haps = []
     yhaps = []
     xcontigs, xhaps = holoseq_data.getContigs(args.xclenfile, args.hap_indicator)
-    sxcontigs, xwidth = holoseq_data.contsort(xcontigs, args)
+    sxcontigs = holoseq_data.contsort(xcontigs, args)
     if args.yclenfile:
         ycontigs, yhaps = holoseq_data.getContigs(args.yclenfile, args.hap_indicator)
-        sycontigs, ywidth = holoseq_data.contsort(ycontigs, args)
+        sycontigs = holoseq_data.contsort(ycontigs, args)
     else:
         sycontigs = sxcontigs
-        ywidth = xwidth
-    for h in xhaps + yhaps:
+    for h in xhaps:
+        if h not in haps:
+            haps.append(h)
+    for h in yhaps:
         if h not in haps:
             haps.append(h)
     if len(haps) == 1:
@@ -138,15 +167,21 @@ if __name__ == "__main__":
 
     if ps == "pair2d":
         p = pair2d.pair2d()
-        outs = p.convert(args)
+        p.inFname = args.inFile
+        outs = p.convert(args)        
     elif ps in ["bw", "bigwig"]:
-        outf = "%s.hseq.gz" % args.inFile
+        if args.gzoutpath:
+            outf = args.gzoutpath
+        else:
+            outf = "%s.hseq.gz" % args.inFile
         p = bigwig.bigwig(args.inFile, outf, args, sxcontigs)
         p.convert()
     elif ps in ["gff3", "gff"]:
-        outf = "%s.hseq.gz" % args.inFile
+        if args.gzoutpath:
+            outf = args.gzoutpath
+        else:
+            outf = "%s.hseq.gz" % args.inFile
         p = gff.gff(args.inFile, outf, sxcontigs, args)
-        log.debug("contigs=%s" % contigs)
         p.convert()
     else:
         log.warn("%s unknown type - cannot process" % ps)

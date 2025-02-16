@@ -2,6 +2,7 @@
 
 import array
 from collections import OrderedDict
+import copy
 from functools import cmp_to_key
 from pathlib import Path
 
@@ -36,27 +37,119 @@ def getHap(contig, hap_indicator="suffix"):
     elif hap_indicator.lower() == "dashsuffix":
         return contig.split("_")[-1]
 
-
-def getContigs(lenFile, hapindicator):
+def getContigs(lenFile, hapindicator, kind='H1'):
     # samtools faidx will make one of these from a genome fasta
     # whitespace delimited contig names and lengths.
-    contigs = []
-    seen = {}
+    #writing coords reuires looking up contig start offset
+    # or if these re different if only h1 contigs are counted.!
+    # for pairs,  len file can have 2+ haps on  trans axis or both might be H1 for cis
+    # so they are all prpepared
+    # MIGHT have both haplotypes...
+    cs = {
+            "contig_names": [],
+            "starts": array.array("l"),
+            "lengths": array.array("l"),
+            "nextstart": 0
+            }
+    haps = [kind]
+    with open(lenFile) as lf:
+        for i, row in enumerate(lf):
+            row = [x.strip() for x in row.strip().split()]
+            if len(row) > 1:
+                cname, clen = row[:2]
+                hapid = getHap(cname, hapindicator)
+                if hapid == kind:
+                    if cname in cs["contig_names"]:
+                        log.debug("Contig %s seen again at row %d of %s, haploid %s" % (cname, i, lenFile, hapid))
+                    else:
+                        cs["contig_names"].append(cname)
+                        cs["starts"].append(cs["nextstart"])
+                        cs["lengths"].append(int(clen))
+                        cs["nextstart"] = cs["nextstart"] + int(clen)
+    return cs, haps
+    
+def oldgetContigs(lenFile, hapindicator, kind='H1'):
+    # samtools faidx will make one of these from a genome fasta
+    # whitespace delimited contig names and lengths.
+    #writing coords reuires looking up contig start offset
+    # or if these re different if only h1 contigs are counted.!
+    # for pairs,  len file can have 2+ haps on  trans axis or both might be H1 for cis
+    # so they are all prpepared
+    # MIGHT have both haplotypes...
+    cs = {
+            "contig_names": [],
+            "starts": array.array("l"),
+            "lengths": array.array("l"),
+            "nextstart": 0
+            }
+    haps = {}
+    contigs = {}
+    allcs = copy.copy(cs)
+    with open(lenFile) as lf:
+        for i, row in enumerate(lf):
+            row = [x.strip() for x in row.strip().split()]
+            if len(row) > 1:
+                cname, clen = row[:2]
+                hapid = getHap(cname, hapindicator)
+                if haps.get(hapid, None) == None:
+                    haps[hapid] = hapid
+                    contigs[hapid] = copy.copy(cs)
+                hapcont = contigs[hapid]
+                if cname in hapcont["contig_names"]:
+                    log.debug("Contig %s seen again at row %d of %s, haploid %s" % (cname, i, lenFile, hapid))
+                else:
+                    hapcont["contig_names"].append(cname)
+                    hapcont["starts"].append(hapcont["nextstart"])
+                    hapcont["lengths"].append(int(clen))
+                    hapcont["nextstart"] = hapcont["nextstart"] + int(clen)
+                    allcs["contig_names"].append(cname)
+                    allcs["starts"].append(hapcont["nextstart"])
+                    allcs["lengths"].append(int(clen))
+    
+    return allcs, haps
+    
+
+def getContigs2(lenFile, hapindicator, kind='H1'):
+    # samtools faidx will make one of these from a genome fasta
+    # whitespace delimited contig names and lengths.
+    #writing coords reuires looking up contig start offset
+    # or if these re different if only h1 contigs are counted.!
+    # for pairs,  len file can have 2+ haps on  trans axis or both might be H1 for cis
+    # so they are all prpepared
+    contigstarts = {}
     haps = []
+    haploids = {}
+    for kind in ['all','H1','H2']:
+        contigstarts[kind] = {
+                                "contig_names": [],
+                                "starts": array.array("l"),
+                                "lengths": array.array("l"),
+                            }
+
     with open(lenFile) as lf:
         for i, row in enumerate(lf):
             row = [x.strip() for x in row.strip().split()]
             if len(row) > 1:
                 c, clen = row[:2]
-                if seen.get(c, None):
-                    log.debug("Contig %s seen again at row %d of %s" % (c, i, lenFile))
+                start = 0
+                hapid = getHap(c, hapindicator)
+                if haploids.get(hapid, None) is None:
+                            haploids[hapid] = {
+                                "contig_names": [],
+                                "starts": array.array("l"),
+                                "lengths": array.array("l"),
+                            }
                 else:
-                    seen[c] = c
-                    contigs.append((c, int(clen)))
-                h = getHap(c, hapindicator)
-                if h not in haps:
-                    haps.append(h)
-    return contigs, haps
+                        if c in haploids[hapid]["contig_names"]:
+                            log.debug("Contig %s seen again at row %d of %s, haploid %s" % (c, i, lenFile, hapid))
+                        
+                        else:
+                                haploids[hapid]["contig_names"].append(c)
+                                haploids[hapid]["starts"].append(start)
+                                start += int(clen)
+                if hapid not in haps:
+                    haps.append(haploids)
+    return haploids, haps
 
 
 def VGPsortfunc(s1, s2):
@@ -160,19 +253,20 @@ def contsort(contigs, args):
     # sort and return offsets to starts of each contig
     #this is name, length from the len file in sort order
     # hstarts = list(itertools.accumulate(hlens))
-    if args.contig_sort.lower() == "vgpname":
-        contigs.sort(key=cmp_to_key(VGPsortfunc))
+
+    cnames = contigs["contig_names"]
+    cstarts = contigs["starts"]
+    deco = [(cnames[i], cstarts[i]) for i in range(len(cnames))]
+    if args.contig_sort.lower() == "vgpname":                                                                                                                                                                                                                                                                                               
+        deco.sort(key=cmp_to_key(VGPsortfunc))
     elif args.contig_sort.lower() == "name":
-        contigs.sort()
+        deco.sort()
     elif args.contig_sort.lower() == "length":
-        contigs.sort(key=cmp_to_key(Lengthsortfunc), reverse=True)
-    clens = [x[1] for x in contigs]
-    cnames = [x[0] for x in contigs]
-    cstarts = list(itertools.accumulate(clens))
-    cstarts.insert(0, 0)  # first one starts at 0
-    scont = OrderedDict(zip(cnames, cstarts))
-    maxpos = cstarts[-1] + clens[-1]
-    return scont, maxpos
+        deco.sort(key=cmp_to_key(Lengthsortfunc), reverse=True)
+    cn = [x[0] for x in deco]
+    cs = [x[1] for x in deco]
+    scont = OrderedDict(zip(cn, cs))
+    return scont
 
 def is_valid_header(header: str) -> tuple[bool, int, str]:
     tokens = [token.strip() for token in header.split()]
@@ -230,17 +324,17 @@ def load(infile):
                     tokens = [token.strip() for token in row.split()]
 
                     if len(tokens) >= 3:
-                        haploid_name, contig_name, start = tokens[:3]
-                        if not haploids.get(haploid_name, None):
-                            haploids[haploid_name] = {
+                        hapid, contig_name, start = tokens[:3]
+                        if not haploids.get(hapid, None):
+                            haploids[hapid] = {
                                 "contig_names": [],
                                 "starts": array.array("l"),
                             }
-                            hh.append(haploid_name)
+                            hh.append(hapid)
 
                         if num_dimensions == 2:
-                            haploids[haploid_name]["contig_names"].append(contig_name)
-                            haploids[haploid_name]["starts"].append(int(start))
+                            haploids[hapid]["contig_names"].append(contig_name)
+                            haploids[hapid]["starts"].append(int(start))
                     else:
                         msg = (
                             "NOT A VALID holoSeq FILE.\n"
@@ -329,7 +423,7 @@ def getMetadata(path: Path):
                     metadata[tokens[0]] = tokens[1:]
             else:
                 break
-    return valid, metadata
+    return True, metadata
 
 
 if __name__ == "__main__":
