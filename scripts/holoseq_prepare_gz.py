@@ -174,15 +174,15 @@ if __name__ == "__main__":
             outf = args.gzoutpath
         else:
             outf = "%s.hseq.gz" % args.inFile
-        p = bigwig.bigwig(args.inFile, outf, args, sxcontigs)
-        p.convert()
+        p = bigwig.bigwig(args.inFile)
+        p.convert(outf, sxcontigs)
     elif ps in ["gff3", "gff"]:
         if args.gzoutpath:
             outf = args.gzoutpath
         else:
             outf = "%s.hseq.gz" % args.inFile
-        p = gff.gff(args.inFile, outf, sxcontigs, args)
-        p.convert()
+        p = gff.gff(args)
+        p.convert(args.inFile, outf, sxcontigs)
     else:
         log.warn("%s unknown type - cannot process" % ps)
     logging.shutdown()

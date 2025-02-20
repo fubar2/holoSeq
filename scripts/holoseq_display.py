@@ -75,6 +75,10 @@ parser.add_argument(
     default="test/mUroPar1_cis1.hseq.gz",
     nargs="+",
 )
+parser.add_argument(
+    "--outfpath",
+    help="path to write output"
+)
 parser.add_argument("--size", help="Display size in pixels. Default is 1000", default=1000)
 parser.add_argument("--version", "-V", action="version", version="0.1")
 args = parser.parse_args()
@@ -87,6 +91,12 @@ for i, infile in enumerate(args.inFile):
     if cls == 'pair2d':
         p = pair2d.pair2d()
         p1, t1 = p.makePanel(infile,pwidth)
+    elif cls == "gff":
+        p = gff.gff(args)
+        p1, t1 = p.makePanel(infile,pwidth)
+    elif cls == "bigwig":
+        p = bigwig.bigwig(infile, args)
+        p1, t1 = p.makePanel(infile, pwidth)
     if i == 0:
         outp = p1
     else:

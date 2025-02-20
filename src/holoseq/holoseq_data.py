@@ -314,10 +314,11 @@ def load(infile):
                 if row[0] == "@":
                     tokens = [token.strip() for token in row[1:].split()]
                     metadata[tokens[0]] = tokens[1:]
-                    if tokens[0] == "GFF":
+                    if tokens[0].lower() == "class" and tokens[1].lower() == "gff":
                         is_gff = True
-                    if tokens[0] == "rotated":
-                        if tokens[1] == "True":
+                        print('@@@ is gff')
+                    if tokens[1] == "rotated":
+                        if tokens[1].lower() == "true" or tokens[1] == "1":
                             rotated = True
 
                 else:
@@ -331,10 +332,8 @@ def load(infile):
                                 "starts": array.array("l"),
                             }
                             hh.append(hapid)
-
-                        if num_dimensions == 2:
-                            haploids[hapid]["contig_names"].append(contig_name)
-                            haploids[hapid]["starts"].append(int(start))
+                        haploids[hapid]["contig_names"].append(contig_name)
+                        haploids[hapid]["starts"].append(int(start))
                     else:
                         msg = (
                             "NOT A VALID holoSeq FILE.\n"
@@ -365,7 +364,7 @@ def load(infile):
                         else:
                             msg = (
                                 "NOT A VALID holoSeq FILE.\n"
-                                f"Line {i} of {str(path)} needs at least two valid integer "
+                                f"Line {i} ({line}) of {str(path)} needs at least two valid integer "
                                 "coordinates to be a valid 2D holoSeq file."
                             )
                             raise HoloSeqFormatError(msg)
@@ -383,10 +382,10 @@ def load(infile):
                         else:
                             msg = (
                                 "NOT A VALID holoSeq FILE.\n"
-                                f"Line {i} of {str(path)} needs at least one valid integer to be "
+                                f"Line {i} ({line}) of {infile} needs at least one valid integer to be "
                                 "a valid 1D holoSeq file."
                             )
-                            raise HoloSeqFormatError("Not a valid holoSeq file.")
+                            raise HoloSeqFormatError(msg)
         if len(hh) < 2:
             log.debug("extending haps %s" % hh)
             hh.append(hh[0])

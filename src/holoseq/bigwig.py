@@ -49,14 +49,14 @@ class bigwig:
     bigwig to barchart - will autoscale to line?
     """
 
-    def __init__(self, inFname, outFname, args, contigs):
+    def __init__(self, inFname,):
         self.inFname = inFname
-        self.outFname = outFname
         self.args = args
         self.hsId = VALID_HSEQ_FORMATS[0]
-        self.contigs = contigs
 
-    def convert(self):
+    def convert(self, contigs, outFname, ):
+        self.contigs = contigs
+        self.outFname = outFname
         fakepath = "in.bw"
         if os.path.isfile(fakepath):
             os.remove(fakepath)
@@ -110,8 +110,8 @@ class bigwig:
                 "@@datafile %s" % self.inFname,
                 "@@refURI %s" % self.args.refURI,
                 "@@xclenfile %s" % self.args.xclenfile,
+                "@@rotated 0",
             ]
-
             return metah + h
 
         hdr = prepHeader()

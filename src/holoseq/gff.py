@@ -3,6 +3,8 @@
 #and a makePanel function to return  a panel gff track from that hseq.gz using the generic data.load function
 
 from bisect import bisect_left
+from collections import OrderedDict
+import copy
 import gzip
 import html
 import logging
@@ -35,19 +37,18 @@ class gff:
         can pop open https://www.ncbi.nlm.nih.gov/protein/XP_026244093.1
     """
 
-    def __init__(self, gff, outFname, contigs, args):
+    def __init__(self,  args):
         self.mrnaseen = {}
         self.segs = {}
         self.comment = "#"
         self.hsId = VALID_HSEQ_FORMATS[0]
-        self.inFname = gff
-        self.outFname = outFname
         self.args = args
-        self.contigs=contigs
-        log.debug("contigs=%s" % str(self.contigs)[:1000])
 
-    def convert(self):
-        with open(self.inFname) as g:
+    def convert(self, inFname, outFname, contigs,):
+
+        self.contigs = contigs
+        log.debug("contigs=%s" % str(self.contigs)[:1000])
+        with open(inFname) as g:
             for i, row in enumerate(g):
                 if not row.startswith(self.comment):
                     (id, name, kind, startp, endp, score, strand, phase, text) = [
@@ -107,7 +108,6 @@ class gff:
                                     "stop_codon",
                                 )
                             )
-                            self.segs[id].append()
                         elif kind.lower() == "cds":
                             self.segs[id].append(
                                 (
@@ -119,10 +119,10 @@ class gff:
                                     "cds",
                                 )
                             )
-        self.export()
-        return self.outFname
+        self.export(inFname, outFname)
+        return outFname
 
-    def export(self):
+    def export(self,inFname, outFname):
         """
         for GFF
         A default  Y value of 100 is set for each mRNA's extent, but often there are dozens of different named sequences in the databases that will overlap.
@@ -144,9 +144,10 @@ class gff:
                 "@@class gff",
                 "@@title %s" % self.args.title,
                 "@@datasource gff",
-                "@@datafile %s" % self.inFname,
+                "@@datafile %s" % inFname,
                 "@@refURI %s" % self.args.refURI,
                 "@@xclenfile %s" % self.args.xclenfile,
+                "@@rotated 0",
             ]
 
             return metah + h
@@ -159,7 +160,7 @@ class gff:
 
         hdr = prepHeader()
 
-        with gzip.open(self.outFname, mode="wb") as ofn:
+        with gzip.open(outFname, mode="wb") as ofn:
             ofn.write(str.encode("\n".join(hdr) + "\n"))
             y = 100
             for con in self.contigs.keys():
@@ -227,12 +228,15 @@ class gff:
                 s = "Mouse click on image for location"
             else:
                 i = bisect_left(h1starts, x)
-                chrx = h1names[i - 1]
-                offsx = x - h1starts[i - 1]
-                s = "%s:%d" % (chrx, offsx)
-                xi = bisect_left(segs[xcf], x)
-                xtarget = segs["target"][xi]
-                s += " x %s" % (xtarget)
+                try:
+                    chrx = h1names[i - 1]
+                    offsx = x - h1starts[i - 1]
+                    s = "%s:%d" % (chrx, offsx)
+                    xi = bisect_left(segs[xcf], x)
+                    xtarget = segs["target"][xi]
+                    s += " x %s" % (xtarget)
+                except IndexError: 
+                    s = "Unknown value for {x} i={i}"
 
             str_pane = pn.pane.Str(
                 s,
@@ -245,7 +249,8 @@ class gff:
             )
             return str_pane
 
-        (hsDims, hapsread, xcoords, ycoords, annos, plotType, metadata, gffdata, hh) = (
+        
+        (hsDims, haploids, xcoords, ycoords, annos, plotType, metadata, gffdata, hh, rotated) = (
             holoseq_data.load(inFile)
         )
         xcf = os.path.splitext(metadata["xclenfile"][0])[0]
@@ -320,14 +325,24 @@ cds XP_026248570.1 531341254 531341334 100 100 + 134
         print("GFF rows read =", len(gffdata))
         h1starts = []
         h1names = []
+        hqstarts = {}
         qtic1 = []
-        for i, hap in enumerate(hapsread.keys()):
+        for i, hap in enumerate(haploids.keys()):
             haps.append(hap)
-            for j, contig in enumerate(hapsread[hap]["cn"]):
-                cstart = hapsread[hap]["startpos"][j]
-                h1starts.append(cstart)
-                h1names.append(contig)
-                qtic1.append((cstart, contig))
+            cnames = haploids[hap]["contig_names"]
+            cstarts = haploids[hap]['starts']
+            if i == 0: # first haplotype
+                h1starts = copy.copy(cstarts)
+                h1names = copy.copy(cnames)
+            elif i == 1:
+                h2starts = copy.copy(cstarts)
+                h2names = copy.copy(cnames)
+            else:
+                log.debug('i=%d but code only expects 2 max.' % i)
+        hap = hh[0]
+        qtic1 = [(h1starts[i], h1names[i]) for i in range(len(h1starts))]
+        print(f"cnames {cnames} cstarts {cstarts}***************")
+        print(f"## qtic1 {qtic1}")
         hap = haps[0]
         # print("h1names=", h1names[:20])
         # qtic1 = [(hqstarts[hap][x], x) for x in hqstarts[hap].keys()]
